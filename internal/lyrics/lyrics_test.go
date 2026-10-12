@@ -596,3 +596,57 @@ func TestArtistsInFileNames(t *testing.T) {
 		t.Error("the second artist in the file name is not taken as a guest")
 	}
 }
+
+// A name in brackets is a second name for the song; a recording's marker is
+// not.
+func TestAliases(t *testing.T) {
+	for title, want := range map[string]string{
+		"Double R's (Dark Tints)":        "Dark Tints",
+		"Extra (For Fun)":                "For Fun",
+		"Deprived (Session Edit)":        "",
+		"Lucid Dreams (Remix)":           "",
+		"All Girls Are The Same (2017)":  "",
+		"Bad Energy (v1)":                "",
+		"Go (Solo)":                      "",
+		"Wishing Well (Pt. 2)":           "",
+		"Boomerang (feat. Lil Yachty)":   "",
+		"Ростов (Live at Москва) (Demo)": "",
+	} {
+		got := strings.Join(aliases(title), "|")
+		if got != want {
+			t.Errorf("aliases(%q) = %q, want %q", title, got, want)
+		}
+	}
+	searched := false
+	for _, attempt := range attempts(Query{Artist: "Juice WRLD", Title: "Double R's (Dark Tints)"}) {
+		searched = searched || attempt.Title == "Dark Tints"
+	}
+	if !searched {
+		t.Error("the name in brackets is not searched for")
+	}
+}
+
+// A studio's file name, with underscores for spaces and the stems and the mix
+// after the song's name.
+func TestStudioFileNames(t *testing.T) {
+	for path, want := range map[string][2]string{
+		"/m/Juice_WRLD_Tell_Me_U_Luv_Me_BPM_128_JER_Stem_Mix_Master_v1_2.mp3": {"", "Juice WRLD Tell Me U Luv Me"},
+		"/m/Juice_Wrld_-_For_Fun_prod_by_Cbmix_w_unheard.mp3":                 {"Juice Wrld", "For Fun"},
+		"/m/all_the_same_extended.mp3":                                        {"", "all the same extended"},
+		"/m/Juice WRLD - Lucid Dreams.mp3":                                    {"Juice WRLD", "Lucid Dreams"},
+		"/m/My_Song.mp3":                                                      {"", "My_Song"},
+	} {
+		artist, title := nameFromFile(path)
+		if artist != want[0] || title != want[1] {
+			t.Errorf("nameFromFile(%q) = %q, %q; want %q, %q", path, artist, title, want[0], want[1])
+		}
+	}
+	found := false
+	q := Query{Artist: "Juice WRLD", Title: "Tell Me U Love Me (Solo Session Edit)", Path: "/m/Juice_WRLD_Tell_Me_U_Luv_Me_BPM_128_JER_Stem_Mix_Master_v1_2.mp3"}
+	for _, attempt := range attempts(q) {
+		found = found || attempt.Title == "Tell Me U Luv Me"
+	}
+	if !found {
+		t.Errorf("the name in the file is not searched for: %+v", attempts(q))
+	}
+}

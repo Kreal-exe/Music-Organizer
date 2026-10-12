@@ -228,6 +228,14 @@ than a guess:
   Edit)`, `Devil Horns (v1)` and `Insecurities OG` return nothing anywhere;
   searched under the plain name they are all found, and another take of the
   same song is accepted as a match.
+- **The song goes by a second name.** A leak is often known by two, and the
+  second is in brackets: `Double R's (Dark Tints)` is Genius's `Double R (Dark
+  Tints)` and turns up only under the name in brackets, so that is searched
+  for too — unless the bracket says which recording this is (`Session Edit`,
+  `Solo`, `Remix`, `v2`).
+- **The file name is a studio's.** `Juice_WRLD_Tell_Me_U_Luv_Me_BPM_128_Stem_Mix_Master_v1.mp3`
+  is read with spaces for the underscores and without what follows the
+  song's name, and gives the spelling the tag got wrong: `Tell Me U Luv Me`.
 - **The names are written another way.** Genius adds a translation to a
   Russian name — `Пропущенный (Missed)`, `семьсот семь (sem’sot sem’)` — and
   prints `ё` where the tags have `е`; both are set aside before names are

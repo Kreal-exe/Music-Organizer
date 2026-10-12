@@ -291,6 +291,11 @@ func withoutLeadingArtist(title string, artists []string) string {
 		if utf8.RuneCountInString(artist) >= 5 {
 			separators = append(separators, "-", "–", "—")
 		}
+		// "Juice WRLD Tell Me U Luv Me", read off a file name written with
+		// underscores: a name of two words or more is taken off a plain space.
+		if len(strings.Fields(artist)) >= 2 {
+			separators = append(separators, " ")
+		}
 		for _, separator := range separators {
 			prefix := artist + separator
 			if len(title) > len(prefix) && strings.EqualFold(title[:len(prefix)], prefix) {
@@ -527,4 +532,49 @@ func otherArtists(credit string) []string {
 		}
 	}
 	return names
+}
+
+// recordingWords say which recording a bracket is about rather than naming
+// the song: "(Session Edit)", "(Remix)", "(Live)".
+var recordingWords = map[string]bool{
+	"session": true, "sessions": true, "studio": true, "remix": true, "mix": true, "live": true,
+	"acoustic": true, "demo": true, "og": true, "original": true, "alt": true, "alternate": true,
+	"extended": true, "slowed": true, "reverb": true, "sped": true, "instrumental": true,
+	"remaster": true, "remastered": true, "take": true, "intro": true, "outro": true,
+	"interlude": true, "skit": true, "bonus": true, "deluxe": true, "radio": true,
+	"solo": true, "acapella": true, "capella": true, "cover": true, "reprise": true,
+	"unplugged": true, "mono": true, "stereo": true, "short": true, "long": true,
+	"finished": true, "unfinished": true, "verse": true, "hook": true, "chorus": true,
+	"part": true, "pt": true, "vip": true, "rework": true, "bootleg": true, "mashup": true,
+	"chopped": true, "screwed": true, "nightcore": true, "speed": true, "instr": true,
+}
+
+// aliases are the other names a title gives its song in brackets: a leak is
+// often known by two, as "Double R's (Dark Tints)" is Genius's "Double R (Dark
+// Tints)" and turns up only under the second. A bracket that says which
+// recording this is, or holds a year, is no name.
+func aliases(title string) []string {
+	var out []string
+	for _, aside := range bracketedAside.FindAllString(cleanTitle(title), -1) {
+		inner := strings.TrimSpace(aside[1 : len(aside)-1])
+		ws := words(inner)
+		if len(ws) == 0 {
+			continue
+		}
+		name := true
+		letters := false
+		for _, word := range ws {
+			if fileQualifiers[word] || recordingWords[word] || versionWord.MatchString(word) {
+				name = false
+				break
+			}
+			for _, r := range word {
+				letters = letters || unicode.IsLetter(r)
+			}
+		}
+		if name && letters {
+			out = append(out, inner)
+		}
+	}
+	return out
 }

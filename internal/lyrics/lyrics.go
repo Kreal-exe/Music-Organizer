@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -276,6 +277,7 @@ func attempts(q Query) []Query {
 	if !strings.EqualFold(bare, titles[0]) {
 		titles = append(titles, bare)
 	}
+	titles = append(titles, aliases(named)...)
 	if fileTitle = cleanTitle(withoutLeadingArtist(fileTitle, artists)); fileTitle != "" {
 		titles = append(titles, fileTitle)
 	}
@@ -345,15 +347,44 @@ func nameFromFile(path string) (artist, title string) {
 		return "", ""
 	}
 	name = strings.TrimSuffix(name, filepath.Ext(name))
+
+	// A name written with underscores for spaces is a download's or a
+	// studio's, "Juice_WRLD_Tell_Me_U_Luv_Me_BPM_128_Stem_Mix_Master_v1": it
+	// is read with spaces, and what follows the song's name — the tempo, the
+	// stems, the mix — is left off.
+	underscored := !strings.Contains(name, " ") && strings.Count(name, "_") >= 2
+	if underscored {
+		name = strings.Join(strings.Fields(strings.ReplaceAll(name, "_", " ")), " ")
+	}
 	name = leadingNumber.ReplaceAllString(strings.TrimSpace(name), "")
 
+	artist, title = "", strings.TrimSpace(name)
 	for _, sep := range []string{" — ", " – ", " - ", " -- "} {
 		if before, after, found := strings.Cut(name, sep); found {
-			return strings.TrimSpace(before), strings.TrimSpace(after)
+			artist, title = strings.TrimSpace(before), strings.TrimSpace(after)
+			break
 		}
 	}
-	// No separator: the whole name is as likely to be the title as anything.
-	return "", strings.TrimSpace(name)
+	if underscored {
+		title = beforeStudioWords(title)
+	}
+	return artist, title
+}
+
+// studioWord starts the part of a studio file's name that is about the file,
+// not the song: "BPM 128", "Stem Mix", "Master v1", "prod by".
+var studioWord = regexp.MustCompile(`(?i)^(?:bpm|\d+bpm|stems?|mix|mixed|master(?:ed)?|prod|produced|session|sessions|cdq|snippet|v\d+|ver|version|edit|final|rough)$`)
+
+// beforeStudioWords keeps a studio file's name up to its first word about
+// the file.
+func beforeStudioWords(title string) string {
+	words := strings.Fields(title)
+	for i, word := range words {
+		if i > 0 && studioWord.MatchString(word) {
+			return strings.Join(words[:i], " ")
+		}
+	}
+	return title
 }
 
 // How long to wait before trying a request again. A free service under load
