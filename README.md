@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="build/appicon.png" width="120" alt="" />
+<img src="packaging/appicon.png" width="120" alt="" />
 
 # Music Library Organizer
 
@@ -281,11 +281,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 The interface is plain HTML, CSS and JavaScript in `frontend/dist`, so there is
 no npm, no Node and no bundler step.
 
-```
-make build          # rebuilds the phone agent, then the application
-```
-
-or, without make:
+**Windows** — in PowerShell:
 
 ```powershell
 .\build.ps1
@@ -295,35 +291,41 @@ Windows refuses to run scripts until told otherwise. Either allow your own once
 with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run it with
 `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
 
-Both do the same two things, and the order matters — the agent is embedded into
-the application, so it is built first:
-
-```
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
-    -o internal/device/agent/mlm-agent-arm64 ./cmd/agent
-wails build
-```
-
-**Windows** needs WebView2, which Windows 11 already has and Windows 10 takes
-[from here](https://developer.microsoft.com/microsoft-edge/webview2/). The
-result, `build/bin/Music Library Organizer.exe`, needs nothing else.
+The result, `Music Library Organizer.exe` in the root of the project, needs
+nothing else but WebView2, which Windows 11 already has and Windows 10 takes
+[from here](https://developer.microsoft.com/microsoft-edge/webview2/).
 
 **macOS** needs the Xcode command line tools (`xcode-select --install`) and
 `~/go/bin` on the `PATH`, where `go install` puts `wails`:
 
 ```
-./build.sh          # build/bin/MusicLibraryOrganizer.app, Apple Silicon and Intel
-./build.sh zip      # the same, signed and zipped for a release
+./build.sh          # builds it and installs /Applications/MusicLibraryOrganizer.app
+./build.sh run      # the same, then opens it
+./build.sh zip      # dist/…-macos-universal.zip, signed, for a release
 ```
 
 `build.sh` installs the Wails CLI if it is missing and runs `make mac` or
 `make mac-zip`, which work just as well on their own.
 
+Both scripts do the same things in the same order. The agent is embedded into
+the application, so it is built first:
+
+```
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
+    -o internal/device/agent/mlm-agent-arm64 ./cmd/agent
+```
+
+Then the project is copied to a temporary folder, `packaging/` — the icon,
+`Info.plist`, the Windows manifest — becomes the `build/` folder Wails expects
+there, and `wails build` runs in the copy. So the project never gets a build
+folder, and on a Mac the application is signed outside iCloud Drive, which
+gives every file it syncs Finder attributes `codesign` refuses.
+
 A `.app` can only be built on a Mac — Apple does not allow
 cross-compiling to its own platform. The Go toolchain builds for macOS 13 or
 newer.
 
-For development, `wails dev`.
+For development, `make dev`, which fills `build/` from `packaging/` first.
 
 **Releases** build themselves. Set `productVersion` in `wails.json`, commit,
 and push an annotated tag whose message is the release text:
@@ -341,8 +343,8 @@ it leaves empty copies of git's object folders — `10`, `2f`, `d0` and so on �
 in the root of the project.
 
 The icon is generated rather than drawn:
-`go run ./tools/icon build` rewrites `build/appicon.png` and
-`build/windows/icon.ico`.
+`make icon` (on a Mac: it is drawn with AppKit, from the `music.note.list`
+symbol) rewrites `packaging/appicon.png` and `packaging/windows/icon.ico`.
 
 ## Tests
 

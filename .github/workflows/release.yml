@@ -61,22 +61,20 @@ jobs:
 
       - run: go install "$WAILS"
 
-      # The agent is embedded into the application, so it is built first.
-      - name: Build the phone agent
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath \
-            -ldflags="-s -w" -o internal/device/agent/mlm-agent-arm64 ./cmd/agent
-
+      # The same script a Windows computer builds with: the agent first,
+      # then the application, in a copy of the project.
       - name: Build the application
         run: |
-          wails build -platform windows/amd64
-          mv "build/bin/Music Library Organizer.exe" \
-            "build/bin/MusicLibraryOrganizer-${{ needs.version.outputs.version }}-windows-amd64.exe"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          powershell -ExecutionPolicy Bypass -File build.ps1
+          mkdir -p dist
+          mv "Music Library Organizer.exe" \
+            "dist/MusicLibraryOrganizer-${{ needs.version.outputs.version }}-windows-amd64.exe"
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: build/bin/*.exe
+          path: dist/*.exe
           if-no-files-found: error
 
   macos:
@@ -103,7 +101,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: build/bin/*.zip
+          path: dist/*.zip
           if-no-files-found: error
 
   release:
