@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"runtime"
 	"strings"
@@ -426,8 +427,10 @@ type PreviewResult struct {
 
 // Preview builds the plan and keeps it, so Apply writes exactly what was shown.
 func (a *App) Preview(rules plan.Rules) (PreviewResult, error) {
+	// The edits are copied: plan.Build reads them without the lock, while
+	// EditTracks may be writing to the map from another call.
 	a.mu.Lock()
-	lib, manual := a.lib, a.manual
+	lib, manual := a.lib, maps.Clone(a.manual)
 	a.mu.Unlock()
 
 	if lib == nil {
@@ -643,6 +646,9 @@ func (a *App) FetchLyrics(opts LyricsOptions) (LyricsReport, error) {
 	}
 
 	ctx := a.begin()
+	// writeCtx is what batches are written with; the last one gets a context
+	// of its own, since a stopped run cancels ctx before it is written.
+	writeCtx := ctx
 	workers := min(runtime.NumCPU(), 4)
 
 	var (
@@ -673,7 +679,7 @@ func (a *App) FetchLyrics(opts LyricsOptions) (LyricsReport, error) {
 
 		mu.Unlock()
 		writing.Lock()
-		err := a.write(ctx, batch, nil, func(written device.Written) {
+		err := a.write(writeCtx, batch, nil, func(written device.Written) {
 			if written.Error == "" {
 				return
 			}
@@ -757,9 +763,12 @@ func (a *App) FetchLyrics(opts LyricsOptions) (LyricsReport, error) {
 	// This and the playlists below take a while on a phone, with every track
 	// already counted, so the interface is told what is going on.
 	wr.EventsEmit(a.ctx, "lyrics:phase", "Writing the last tracks…")
+	last, stopLast := context.WithTimeout(a.ctx, 3*time.Minute)
+	writeCtx = last
 	mu.Lock()
 	flush()
 	mu.Unlock()
+	stopLast()
 
 	if a.onPhone() {
 		wr.EventsEmit(a.ctx, "lyrics:phase", "Putting the playlists back on the phone…")

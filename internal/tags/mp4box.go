@@ -156,7 +156,7 @@ func parseBoxes(buf []byte, descend map[string]bool) ([]*node, error) {
 			size = int64(binary.BigEndian.Uint64(buf[off+8 : off+16]))
 			header, large = 16, true
 		}
-		if size < header || off+int(size) > len(buf) {
+		if size < header || size > int64(len(buf)-off) { // no off+size: a 64-bit size can overflow it
 			return nil, errBadBox
 		}
 
@@ -219,7 +219,7 @@ func shiftChunkOffsets(buf []byte, delta, threshold int64) error {
 			size = int64(binary.BigEndian.Uint64(buf[off+8 : off+16]))
 			header = 16
 		}
-		if size < header || off+int(size) > len(buf) {
+		if size < header || size > int64(len(buf)-off) { // no off+size: a 64-bit size can overflow it
 			return errBadBox
 		}
 

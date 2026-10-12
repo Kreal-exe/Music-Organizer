@@ -3,7 +3,8 @@
 // so the symbol stays a crisp vector at every size. It needs a Mac, and is run
 // by hand only when the icon changes:
 //
-//   make icon
+//   clang -fobjc-arc -framework Cocoa tools/icon/make_icon.m -o "$TMPDIR/make_icon"
+//   "$TMPDIR/make_icon" packaging
 //
 // which writes packaging/appicon.png (the macOS icon, on Apple's icon grid)
 // and packaging/windows/icon.ico (full tiles, as Windows icons are, each size

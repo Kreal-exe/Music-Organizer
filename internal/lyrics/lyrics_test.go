@@ -769,3 +769,9 @@ func TestNetEaseNamesMustMatch(t *testing.T) {
 		}
 	}
 }
+
+func TestMedleyNames(t *testing.T) {
+	if got := strings.Join(aliases("Around Me x Clout (Edit)"), "|"); got != "Around Me|Clout" {
+		t.Errorf("aliases = %q", got)
+	}
+}
