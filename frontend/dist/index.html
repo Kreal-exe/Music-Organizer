@@ -83,6 +83,7 @@
     <button class="nav" data-view="tracks">Tracks<span id="count-tracks" class="pill"></span></button>
     <button class="nav" data-view="lyrics">Lyrics<span id="count-lyrics" class="pill"></span></button>
     <button class="nav" data-view="cleanup">Cleanup</button>
+    <button class="nav" data-view="playlists">Playlists<span id="count-playlists" class="pill"></span></button>
   </nav>
 
   <section class="panel">
@@ -222,6 +223,53 @@
           <button id="broken-delete" class="btn danger small" disabled>Delete ticked files…</button>
         </div>
       </div>
+    </article>
+
+    <!-- Playlists ----------------------------------------------------- -->
+    <article class="view" data-view="playlists" hidden>
+      <div class="headline">
+        <div class="headline-row"><div>Move playlists from one player to another</div></div>
+        <div class="row-sub">Playlists of iTunes or Music (exported as .txt or .xml), Android, VLC, foobar2000
+          or Windows Media Player. Their tracks are found in this library even when the playlist was made on
+          another computer, and every path is written the way the file is really named — a phone tells
+          “й” typed as one character from “й” typed as two, and leaves such tracks out.</div>
+      </div>
+
+      <div class="toolbar">
+        <button id="pl-add" class="btn">Add playlist files…</button>
+        <button id="pl-library" class="btn">Find in the library</button>
+        <button id="pl-phone" class="btn">From the phone</button>
+        <div class="grow"></div>
+        <label class="check inline"><input type="checkbox" id="pl-all" checked /> <span><b>All</b></span></label>
+        <button id="pl-clear" class="btn small">Clear list</button>
+      </div>
+      <div id="pl-list" class="list playlists"></div>
+
+      <h2>For which player</h2>
+      <div id="pl-targets" class="choices"></div>
+
+      <h2>Save</h2>
+      <div class="choices">
+        <label class="choice"><input type="radio" name="pl-dest" value="library" checked />
+          <span><b>Beside the music</b><em id="pl-dest-library"></em></span></label>
+        <label class="choice" id="pl-dest-folder-row"><input type="radio" name="pl-dest" value="folder" />
+          <span><b>In another folder on this computer</b>
+            <em class="row"><span id="pl-folder" class="path">none chosen</span>
+              <button id="pl-folder-pick" class="btn small">Choose…</button></em></span></label>
+        <label class="choice" id="pl-dest-phone-row" hidden><input type="radio" name="pl-dest" value="phone" />
+          <span><b id="pl-phone-name">On the phone</b>
+            <em class="row">folder <input id="pl-phone-folder" class="search path" type="text"
+              value="/sdcard/Music" spellcheck="false" /></em></span></label>
+      </div>
+      <div id="pl-dest-note" class="notice" hidden></div>
+
+      <div class="toolbar save-row">
+        <button id="pl-save" class="btn primary" disabled>Save playlists</button>
+        <button id="pl-cancel" class="btn" hidden>Stop</button>
+        <div class="grow"></div>
+        <span id="pl-status" class="muted"></span>
+      </div>
+      <div id="pl-log" class="log"></div>
     </article>
 
   </section>

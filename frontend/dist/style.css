@@ -1106,3 +1106,19 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
 }
 .tick-group { display: inline-flex; align-items: center; cursor: pointer; }
 .tick-all input, .tick-group input { accent-color: var(--accent); }
+
+/* Playlists -------------------------------------------------------------- */
+
+.list.playlists .row-item { align-items: flex-start; }
+.list.playlists .row-item > input[type="checkbox"] { margin-top: 9px; accent-color: var(--accent); }
+.playlist .rename-input { max-width: 340px; padding: 5px 9px; margin-bottom: 3px; }
+.playlist .row-sub.path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playlist-facts { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-top: 4px; }
+.ok-text { color: var(--ok); }
+.warn-text { color: var(--warn); }
+.error-text { color: var(--err); }
+
+.choice em.row { gap: 8px; margin-top: 4px; }
+.choice em.row .search { max-width: 300px; padding: 5px 9px; }
+.save-row { margin-top: 18px; }
+#pl-dest-note { margin-top: 10px; }

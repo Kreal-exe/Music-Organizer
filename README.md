@@ -68,6 +68,44 @@ and title never reach the player at all. Covers on those files are re-encoded
 to fit within 1000 pixels, which is more than any screen shows them at: one
 real file went from a 12.9 MB tag to 102 KB, and the phone started reading it.
 
+**Playlists.** Moves playlists from one player to another: iTunes and Music
+(their *Unicode text* and XML exports), Android, VLC, foobar2000, Windows Media
+Player. Each track is looked up in the open library — by its path, or when the
+playlist was made under another user, drive or computer, by the longest end of
+its path that names exactly one file — and the playlist is written for the
+player you pick, beside the music, in another folder or straight onto a phone.
+The phone's own playlists are listed too, each with how many of its tracks the
+phone actually shows.
+
+## Playlists
+
+| Player | Written as |
+|---|---|
+| Android — Phonograph, Poweramp, Samsung Music, Musicolet… | `.m3u`, UTF-8, paths from the playlist's folder |
+| iTunes and Music, Mac and Windows | `.txt`, the table they export, UTF-16 with absolute paths — *File → Library → Import Playlist* |
+| VLC, foobar2000, AIMP, Winamp, MusicBee | `.m3u8` with titles and lengths |
+| Windows Media Player | `.wpl` |
+| Strawberry, Clementine, VLC | `.xspf` |
+| Winamp and older players | `.pls` |
+
+All of these are read as well, along with an iTunes library exported as XML
+(every playlist in it) and an old `.m3u` in a Windows code page.
+
+A playlist is only useful if every path in it is spelled the way the file is
+named, byte for byte, and that is where playlists moved by hand go wrong. macOS
+often stores a name such as *Танцуй* with the *й* as two characters, a letter
+and a combining mark; copied to a phone the name keeps that form, and a
+playlist that spells it as one character names a file Android does not have —
+it shows the playlist with those tracks left out and no error anywhere. So
+names are matched regardless of Unicode form and letter case, but written
+exactly as the files are named where the playlist is going: on this computer
+as they are on its disk, on a phone as the phone lists them.
+
+Saved onto a phone, a playlist is handed to the media library at once and
+counted again until the count settles, and the result says how many tracks
+the phone shows. A different playlist of the same name is kept beside the new
+one as `.bak`, on the phone and on this computer alike.
+
 ## Formats
 
 | Format | Tags |

@@ -126,6 +126,7 @@ function showView(name) {
     view.hidden = view.dataset.view !== name;
   }
   if (name === "tracks") renderTracks();
+  if (name === "playlists") openPlaylists();
 }
 
 for (const nav of document.querySelectorAll(".nav")) {
@@ -2427,6 +2428,296 @@ window.runtime.EventsOn("lyrics:track", (result) => {
     if (atBottom) log.scrollTop = log.scrollHeight;
   }
   paintLyricsCounts();
+});
+
+/* Playlists ---------------------------------------------------------------- */
+
+// The playlists read so far, each with the name it will be saved under. Go
+// keeps the playlists themselves; this keeps what the user chose about them.
+const lists = {
+  items: [],
+  targets: [],
+  target: "android",
+  folder: "",
+  phone: null,      // a ready phone, for a library on this computer
+  loadedFor: "",    // the library the list was first filled from
+  busy: false,
+};
+
+const PLAYLIST_TARGET_KEY = "mlo-playlist-target";
+
+async function openPlaylists() {
+  if (!lists.targets.length) {
+    try {
+      lists.targets = (await go().PlaylistTargets()) || [];
+      const saved = localStorage.getItem(PLAYLIST_TARGET_KEY);
+      if (lists.targets.some((t) => t.id === saved)) lists.target = saved;
+    } catch {}
+    renderTargets();
+  }
+  updateDestinations();
+  if (lists.loadedFor !== state.root) {
+    lists.loadedFor = state.root;
+    lists.items = [];
+    $("pl-log").replaceChildren();
+    renderPlaylists();
+    await loadPlaylists(() => go().LibraryPlaylists(),
+      state.onPhone ? "Reading the playlists on the phone…" : "Looking for playlists in the library…");
+  }
+  if (!state.onPhone) findPhone();
+}
+
+function setPlaylistsBusy(busy, status) {
+  lists.busy = busy;
+  for (const id of ["pl-add", "pl-library", "pl-clear"]) $(id).disabled = busy;
+  $("pl-phone").disabled = busy || (!state.onPhone && !lists.phone);
+  $("pl-cancel").hidden = !busy;
+  if (status !== undefined) $("pl-status").textContent = status;
+  updateSaveButton();
+}
+
+// loadPlaylists adds what fetch returns to the list, leaving out a playlist
+// that is already there.
+async function loadPlaylists(fetch, status) {
+  setPlaylistsBusy(true, status);
+  let added = 0;
+  try {
+    const found = (await fetch()) || [];
+    const known = new Set(lists.items.map((item) => `${item.path}\u0000${item.name}`));
+    for (const item of found) {
+      const k = `${item.path}\u0000${item.name}`;
+      if (known.has(k)) continue;
+      known.add(k);
+      lists.items.push({ ...item, ticked: true, saveAs: item.name, result: null });
+      added++;
+    }
+    $("pl-status").textContent = found.length
+      ? `${plural(added, "playlist")} added`
+      : "No playlists found";
+  } catch (err) {
+    $("pl-status").textContent = "";
+    toast(String(err), true);
+  } finally {
+    setPlaylistsBusy(false);
+    renderPlaylists();
+  }
+}
+
+$("pl-add").addEventListener("click", () => loadPlaylists(() => go().ChoosePlaylistFiles(), "Reading…"));
+$("pl-library").addEventListener("click", () => loadPlaylists(() => go().LibraryPlaylists(),
+  state.onPhone ? "Reading the playlists on the phone…" : "Looking for playlists in the library…"));
+$("pl-phone").addEventListener("click", () => {
+  if (state.onPhone) {
+    loadPlaylists(() => go().LibraryPlaylists(), "Reading the playlists on the phone…");
+  } else if (lists.phone) {
+    loadPlaylists(() => go().PhonePlaylists(lists.phone.serial), `Reading the playlists on ${lists.phone.model || "the phone"}…`);
+  }
+});
+$("pl-clear").addEventListener("click", () => {
+  lists.items = [];
+  $("pl-log").replaceChildren();
+  $("pl-status").textContent = "";
+  renderPlaylists();
+});
+$("pl-all").addEventListener("change", () => {
+  for (const item of lists.items) item.ticked = $("pl-all").checked;
+  renderPlaylists();
+});
+$("pl-cancel").addEventListener("click", () => go().Cancel());
+
+// findPhone looks for a phone to save on, for a library on this computer.
+async function findPhone() {
+  try {
+    const status = await go().Phones();
+    lists.phone = (status.devices || []).find((d) => d.ready) || null;
+  } catch {
+    lists.phone = null;
+  }
+  updateDestinations();
+  setPlaylistsBusy(lists.busy);
+}
+
+function renderPlaylists() {
+  const list = $("pl-list");
+  list.replaceChildren(...lists.items.map(playlistRow));
+  $("count-playlists").textContent = lists.items.length || "";
+  $("pl-all").checked = lists.items.length > 0 && lists.items.every((item) => item.ticked);
+  updateSaveButton();
+}
+
+function playlistRow(item) {
+  const row = el("div", "row-item playlist");
+  const box = el("input");
+  box.type = "checkbox";
+  box.checked = item.ticked;
+  box.addEventListener("change", () => {
+    item.ticked = box.checked;
+    $("pl-all").checked = lists.items.every((i) => i.ticked);
+    updateSaveButton();
+  });
+
+  const main = el("div", "row-main");
+  const name = el("input", "rename-input");
+  name.type = "text";
+  name.spellcheck = false;
+  name.value = item.saveAs;
+  name.title = "The name it is saved under";
+  name.addEventListener("input", () => { item.saveAs = name.value; });
+  const where = item.where === "phone" ? "on the phone" : "on this computer";
+  main.append(name, el("div", "row-sub path", `${item.format} · ${where} · ${item.path}`));
+  if (item.result) main.append(resultLine(item.result));
+
+  const facts = el("div", "playlist-facts");
+  if (item.found >= 0) {
+    const found = el("span", item.found < item.entries ? "badge certain" : "badge",
+      `${item.found} of ${tracks(item.entries)} in the library`);
+    found.title = "Tracks of the playlist found in the open library";
+    facts.append(found);
+  } else {
+    facts.append(el("span", "badge", tracks(item.entries)));
+  }
+  if (item.visible >= 0) {
+    const shows = el("span", item.visible < item.entries ? "badge certain" : "badge", `phone shows ${item.visible}`);
+    shows.title = "Tracks the phone's media library matched — what Phonograph and other players show";
+    facts.append(shows);
+  }
+
+  row.append(box, main, facts);
+  return row;
+}
+
+function resultLine(result) {
+  if (result.error) return el("div", "row-sub error-text", `✗ ${result.error}`);
+  let text = `→ ${baseName(result.file)}: ${result.found} of ${tracks(result.entries)}`;
+  if (result.visible >= 0) text += ` · the phone shows ${result.visible}`;
+  return el("div", result.found < result.entries ? "row-sub warn-text" : "row-sub ok-text", text);
+}
+
+function renderTargets() {
+  const box = $("pl-targets");
+  box.replaceChildren();
+  for (const target of lists.targets) {
+    const label = el("label", "choice");
+    const radio = el("input");
+    radio.type = "radio";
+    radio.name = "pl-target";
+    radio.value = target.id;
+    radio.checked = target.id === lists.target;
+    radio.dataset.absolute = String(target.absolute);
+    radio.addEventListener("change", () => {
+      lists.target = target.id;
+      try { localStorage.setItem(PLAYLIST_TARGET_KEY, target.id); } catch {}
+      updateDestinations();
+    });
+    const text = el("span");
+    text.append(el("b", "", target.title), el("em", "", target.detail));
+    label.append(radio, text);
+    box.append(label);
+  }
+}
+
+const destination = () => document.querySelector('input[name="pl-dest"]:checked')?.value || "library";
+
+function updateDestinations() {
+  $("pl-dest-library").textContent = state.onPhone ? `${state.root} on the phone` : state.root;
+  $("pl-dest-folder-row").hidden = state.onPhone;
+  $("pl-dest-phone-row").hidden = state.onPhone || !lists.phone;
+  if (lists.phone) $("pl-phone-name").textContent = `On the phone · ${lists.phone.model || lists.phone.serial}`;
+  $("pl-folder").textContent = lists.folder || "none chosen";
+
+  // A choice that is no longer offered falls back to beside the music.
+  const chosen = document.querySelector('input[name="pl-dest"]:checked');
+  if (chosen && chosen.closest("label").hidden) {
+    document.querySelector('input[name="pl-dest"][value="library"]').checked = true;
+  }
+
+  const onPhone = state.onPhone || destination() === "phone";
+  const target = lists.targets.find((t) => t.id === lists.target);
+  const note = $("pl-dest-note");
+  note.hidden = !(onPhone && target && target.absolute);
+  note.textContent = "iTunes and Music need paths on a computer: save these on this computer, or pick another player for the phone.";
+  updateSaveButton();
+}
+
+for (const radio of document.querySelectorAll('input[name="pl-dest"]')) {
+  radio.addEventListener("change", updateDestinations);
+}
+
+$("pl-folder-pick").addEventListener("click", async (event) => {
+  event.preventDefault();
+  try {
+    const folder = await go().ChoosePlaylistFolder();
+    if (folder) {
+      lists.folder = folder;
+      document.querySelector('input[name="pl-dest"][value="folder"]').checked = true;
+      updateDestinations();
+    }
+  } catch (err) {
+    toast(String(err), true);
+  }
+});
+
+function updateSaveButton() {
+  const ticked = lists.items.filter((item) => item.ticked).length;
+  const blocked = !$("pl-dest-note").hidden || (destination() === "folder" && !lists.folder);
+  $("pl-save").disabled = lists.busy || ticked === 0 || blocked;
+  $("pl-save").textContent = ticked ? `Save ${plural(ticked, "playlist")}` : "Save playlists";
+}
+
+$("pl-save").addEventListener("click", async () => {
+  const chosen = lists.items.filter((item) => item.ticked);
+  if (!chosen.length) return;
+  const request = {
+    items: chosen.map((item) => ({ id: item.id, name: item.saveAs.trim() || item.name })),
+    target: lists.target,
+    destination: destination(),
+    folder: destination() === "folder" ? lists.folder : destination() === "phone" ? $("pl-phone-folder").value.trim() : "",
+    serial: destination() === "phone" && lists.phone ? lists.phone.serial : "",
+  };
+  for (const item of chosen) item.result = null;
+  $("pl-log").replaceChildren();
+  renderPlaylists();
+
+  setPlaylistsBusy(true, "Saving…");
+  try {
+    const results = (await go().SavePlaylists(request)) || [];
+    const failed = results.filter((r) => r.error).length;
+    $("pl-status").textContent = failed
+      ? `Saved ${results.length - failed} of ${results.length} — see below`
+      : `Saved ${plural(results.length, "playlist")}`;
+  } catch (err) {
+    $("pl-status").textContent = "";
+    toast(String(err), true);
+  } finally {
+    setPlaylistsBusy(false);
+  }
+});
+
+window.runtime.EventsOn("playlists:phase", (text) => {
+  if (text) $("pl-status").textContent = text;
+});
+
+window.runtime.EventsOn("playlists:saved", (result) => {
+  const item = lists.items.find((i) => i.id === result.id);
+  if (item) item.result = result;
+  renderPlaylists();
+
+  const log = $("pl-log");
+  if (result.error) {
+    log.append(el("div", "error", `✗ ${result.name}: ${result.error}`));
+  } else {
+    log.append(el("div", "found", `✓ ${result.file} — ${result.found} of ${tracks(result.entries)}`));
+    if (result.visible >= 0) {
+      log.append(el("div", result.visible < result.found ? "error" : "note",
+        `  the phone shows ${result.visible} of them${result.visible < result.found ? " — it may still be reading the file; look again in a minute" : ""}`));
+    }
+  }
+  const missing = result.missing || [];
+  if (missing.length) {
+    log.append(el("div", "missing", `  ${plural(missing.length, "track")} not found here:`));
+    for (const location of missing.slice(0, 25)) log.append(el("div", "missing", `    ${location}`));
+    if (missing.length > 25) log.append(el("div", "missing", `    …and ${missing.length - 25} more`));
+  }
 });
 
 // A folder passed on the command line, or dropped onto the application, opens

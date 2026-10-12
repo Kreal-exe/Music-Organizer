@@ -51,6 +51,9 @@ type App struct {
 	manual map[string]tags.Edit
 	phone  *device.Phone // nil when the collection is a folder on this computer
 	cancel context.CancelFunc
+
+	// lists holds the playlists the Playlists view has read.
+	lists playlists
 }
 
 func NewApp() *App {
@@ -354,6 +357,12 @@ func (a *App) adopt(lib *library.Library, phone *device.Phone) {
 	a.phone = phone
 	a.changes = nil
 	a.manual = map[string]tags.Edit{}
+
+	// The files a playlist is looked up among are listed again for the new
+	// library, the next time a playlist needs them.
+	a.lists.mu.Lock()
+	a.lists.index = nil
+	a.lists.mu.Unlock()
 }
 
 // EditTracks records an edit against every listed track. A nil field is left
