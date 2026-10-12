@@ -137,7 +137,7 @@ func NewFinder() *Finder {
 				// NetEase before Genius: it answers quickly, has timed words, and
 				// every track it places is one request fewer to Genius, which
 				// turns requests away after many in a row.
-				&netease{client: client, limiter: newLimiter(300 * time.Millisecond)},
+				&netease{client: client, limiter: newLimiter(150 * time.Millisecond)},
 				// Genius is only asked about tracks LRCLIB could not place, and
 				// is paced more slowly because it serves full web pages.
 				pages,
@@ -170,8 +170,14 @@ func (f *Finder) Find(ctx context.Context, q Query) (Match, error) {
 	// case nothing better turns up, and the search goes on for the recording.
 	fallback := Match{}
 
-	for _, round := range f.rounds {
-		for _, attempt := range searches {
+	for r, round := range f.rounds {
+		for a, attempt := range searches {
+			// The last-resort sources cannot search, only answer about the
+			// exact name; asking them about every other reading only costs
+			// time, and lyrics.ovh takes seconds to say no.
+			if r > 0 && a > 0 {
+				break
+			}
 			for _, p := range round {
 				if err := ctx.Err(); err != nil {
 					return Match{}, err
@@ -377,7 +383,7 @@ func nameFromFile(path string) (artist, title string) {
 	// studio's, "Juice_WRLD_Tell_Me_U_Luv_Me_BPM_128_Stem_Mix_Master_v1": it
 	// is read with spaces, and what follows the song's name — the tempo, the
 	// stems, the mix — is left off.
-	underscored := !strings.Contains(name, " ") && strings.Count(name, "_") >= 2
+	underscored := strings.Count(name, "_") >= 2 || (strings.Contains(name, " ") && strings.Contains(name, "_"))
 	if underscored {
 		name = strings.Join(strings.Fields(strings.ReplaceAll(name, "_", " ")), " ")
 	}
@@ -405,12 +411,20 @@ var studioWord = regexp.MustCompile(`(?i)^(?:bpm|\d+bpm|stems?|mix|mixed|master(
 func beforeStudioWords(title string) string {
 	words := strings.Fields(title)
 	for i, word := range words {
-		if i > 0 && studioWord.MatchString(word) {
+		if i == 0 {
+			continue
+		}
+		// A date or a take number at the end, "In The Mix 7 3 18": a number
+		// that ends the name or is followed by another.
+		number := plainNumber.MatchString(word) && (i == len(words)-1 || plainNumber.MatchString(words[i+1]))
+		if studioWord.MatchString(word) || number {
 			return strings.Join(words[:i], " ")
 		}
 	}
 	return title
 }
+
+var plainNumber = regexp.MustCompile(`^\d{1,4}$`)
 
 // How long to wait before trying a request again. A free service under load
 // answers 503 for a moment and is there again straight after, and a library of
