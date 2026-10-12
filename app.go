@@ -797,6 +797,13 @@ func (a *App) lookup(ctx context.Context, track tags.Track) (LyricsResult, lyric
 		// Whatever came closest is named, so a track the databases file under
 		// another name can be finished by hand from the track menu.
 		var missing *lyrics.NotFound
+		if errors.As(err, &missing) && len(missing.Unanswered) > 0 {
+			// Not found where it was looked for, but a source did not answer:
+			// an error worth another try, not a verdict.
+			result.Status = "error"
+			result.Detail = "not found, but " + strings.Join(missing.Unanswered, "; ") + " — try again later"
+			return result, lyrics.Match{}
+		}
 		if errors.As(err, &missing) && missing.Closest.Title != "" {
 			result.Detail = fmt.Sprintf("closest: %s — %s", missing.Closest.Artist, missing.Closest.Title)
 		}

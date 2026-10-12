@@ -36,6 +36,10 @@ func cleanTitle(title string) string {
 	if loc := guestSuffix.FindStringIndex(title); loc != nil && loc[0] > 0 {
 		title = title[:loc[0]]
 	}
+	// And a producer's credit: "U Okay Prod. by Eskiimo".
+	if loc := producerSuffix.FindStringIndex(title); loc != nil && loc[0] > 0 {
+		title = title[:loc[0]]
+	}
 	return strings.TrimSpace(strings.Join(strings.Fields(title), " "))
 }
 
@@ -45,6 +49,9 @@ func cleanTitle(title string) string {
 // The Russian spellings are kept out of the \b guard, because a word boundary
 // here is an ASCII one: it never matches beside a Cyrillic letter, and the
 // credit would stay in the name that goes to the databases.
+// A producer credited after the title with no brackets around it.
+var producerSuffix = regexp.MustCompile(`(?i)\s+[-–—|]?\s*(?:prod\.\s*(?:by\s+)?|prod\s+by\s+|produced\s+by\s+)\S.*$`)
+
 var guestSuffix = regexp.MustCompile(`(?i)\s+(?:\b(?:feat|ft|featuring|w/)\b\.?|п\.\s?у\.?|при участии|совместно с)\s+`)
 
 // The same credit as a title carries it, where a bracket usually holds it:

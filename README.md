@@ -228,6 +228,8 @@ than a guess:
   Edit)`, `Devil Horns (v1)` and `Insecurities OG` return nothing anywhere;
   searched under the plain name they are all found, and another take of the
   same song is accepted as a match.
+- **The producer is in the title.** `U Okay Prod. by Eskiimo` is searched for
+  as `U Okay`, as a credit in brackets already was.
 - **The song goes by a second name.** A leak is often known by two, and the
   second is in brackets: `Double R's (Dark Tints)` is Genius's `Double R (Dark
   Tints)` and turns up only under the name in brackets, so that is searched
@@ -262,9 +264,11 @@ than a guess:
 What nearly matched is named instead of being thrown away silently: a track
 the databases hold under an alias comes back as *not found (closest: …)*.
 
-A source that answers 429 or 5xx is retried twice before it counts as failed,
-and a source falling over is only reported when no source answered at all —
-otherwise the track was searched for properly and simply is not there.
+A source that answers 429 or 5xx is retried twice before it counts as failed.
+When Genius or LRCLIB fails and the rest find nothing, the track is listed
+under *errors* with the reason — Genius turns requests away for a while after
+many in a row — rather than as not found: it may well be there, and is worth
+another try later.
 
 The counters under the progress bar — found, not found, errors, with timings
 — are filters: click one to see only the tracks it counts, and again to see

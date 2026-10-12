@@ -28,6 +28,9 @@ import (
 // Named, they can be looked at and taken by hand.
 type NotFound struct {
 	Closest Match
+	// Unanswered names the sources that failed while the others found
+	// nothing, with why: the track may well be there.
+	Unanswered []string
 }
 
 func (e *NotFound) Error() string { return ErrNotFound.Error() }
@@ -154,6 +157,8 @@ func (f *Finder) Find(ctx context.Context, q Query) (Match, error) {
 
 	var firstErr error
 	answered := 0
+	failed := map[string]bool{}
+	var unanswered []string
 	closest := Match{}
 	// A match that is the right song but not the recording the title names —
 	// the released "Everlasting Love" for a session edit of it — is kept in
@@ -171,6 +176,12 @@ func (f *Finder) Find(ctx context.Context, q Query) (Match, error) {
 				if err != nil {
 					if firstErr == nil {
 						firstErr = err
+					}
+					// lyrics.ovh cannot search and is often down; its
+					// failing says nothing about whether the track is there.
+					if ctx.Err() == nil && !failed[p.name()] && p.name() != "lyrics.ovh" {
+						failed[p.name()] = true
+						unanswered = append(unanswered, err.Error())
 					}
 					continue
 				}
@@ -210,10 +221,17 @@ func (f *Finder) Find(ctx context.Context, q Query) (Match, error) {
 	if answered == 0 && firstErr != nil {
 		return Match{}, firstErr
 	}
+	// A source that failed while the rest found nothing may have had it —
+	// Genius turning requests away for a while is the usual case — so that
+	// is said rather than a plain "not found".
+	notFound := &NotFound{Unanswered: unanswered}
 	if closest.Score >= worthMentioning {
-		return Match{}, &NotFound{Closest: closest}
+		notFound.Closest = closest
 	}
-	return Match{}, ErrNotFound
+	if notFound.Closest.Title == "" && len(unanswered) == 0 {
+		return Match{}, ErrNotFound
+	}
+	return Match{}, notFound
 }
 
 // attempts lists the searches worth making for one track, best first.

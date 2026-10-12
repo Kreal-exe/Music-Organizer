@@ -650,3 +650,54 @@ func TestStudioFileNames(t *testing.T) {
 		t.Errorf("the name in the file is not searched for: %+v", attempts(q))
 	}
 }
+
+func TestProducerCredits(t *testing.T) {
+	for title, want := range map[string]string{
+		"U Okay Prod. by Eskiimo":       "U Okay",
+		"Hellboy prod by Lil Mexico":    "Hellboy",
+		"Tarot - Produced by Nick Mira": "Tarot",
+		"Prodigy":                       "Prodigy",
+		"Product of the Streets":        "Product of the Streets",
+	} {
+		if got := cleanTitle(title); got != want {
+			t.Errorf("cleanTitle(%q) = %q, want %q", title, got, want)
+		}
+	}
+}
+
+type failingProvider string
+
+func (f failingProvider) name() string { return string(f) }
+func (f failingProvider) search(context.Context, Query) ([]Match, error) {
+	return nil, errors.New(string(f) + " replied 429 Too Many Requests")
+}
+
+// A source that turns the request away while the others find nothing is no
+// "not found": the track may be there, and the caller is told which source to
+// try again.
+func TestUnansweredIsNotNotFound(t *testing.T) {
+	q := Query{Artist: "Juice WRLD", Title: "Hit A Lick"}
+	f := &Finder{MinScore: 0.62, rounds: [][]provider{{stubProvider{}, failingProvider("Genius")}}}
+	_, err := f.Find(context.Background(), q)
+	var missing *NotFound
+	if !errors.As(err, &missing) || len(missing.Unanswered) != 1 || !strings.Contains(missing.Unanswered[0], "Genius replied 429") {
+		t.Fatalf("err = %v", err)
+	}
+
+	f = &Finder{MinScore: 0.62, rounds: [][]provider{{stubProvider{}, failingProvider("lyrics.ovh")}}}
+	if _, err := f.Find(context.Background(), q); !errors.Is(err, ErrNotFound) || errors.As(err, &missing) && len(missing.Unanswered) > 0 {
+		t.Errorf("lyrics.ovh being down made it more than not found: %v", err)
+	}
+}
+
+// A song Genius files under its producer first: "Syki & Juice WRLD".
+func TestCreditedSecond(t *testing.T) {
+	q := Query{Artist: "Juice WRLD", Title: "Whimpers In The Darkness (feat. KILL.ZERO)"}
+	page := Match{Source: "Genius", Artist: "Syki & Juice WRLD", Title: "Whimpers in the Darkness",
+		Lyrics: "[Verse 1]\nWhimpers in the darkness\nI can hear them calling\n[Chorus]\nWhimpers in the darkness"}
+	f := &Finder{MinScore: 0.62, rounds: [][]provider{{stubProvider{page}}}}
+	got, err := f.Find(context.Background(), q)
+	if err != nil || got.Title != "Whimpers in the Darkness" {
+		t.Errorf("Find = %+v, %v (score %.2f)", got, err, score(attempts(q)[0], page))
+	}
+}
