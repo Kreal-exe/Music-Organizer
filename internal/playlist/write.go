@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Relative is the path of file seen from folder ("../Other/a.mp3"), both
@@ -22,6 +24,21 @@ func Relative(file, folder string) string {
 	}
 	parts = append(parts, target[common:]...)
 	return strings.Join(parts, "/")
+}
+
+// Composed spells every track's path with composed letters — "й" as one code
+// point — the way Android names a file copied to it, though a Mac may keep the
+// same name as "и" and a breve. Android's media library tells the two
+// spellings of a file name apart, so an Android playlist written on a computer
+// for a phone uses this one; written on the phone itself, it spells each file
+// as the phone has it.
+func Composed(tracks []Track) []Track {
+	out := make([]Track, len(tracks))
+	for i, track := range tracks {
+		track.Path = norm.NFC.String(track.Path)
+		out[i] = track
+	}
+	return out
 }
 
 // Write renders a playlist for target. Paths are written relative to folder,

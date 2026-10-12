@@ -13,7 +13,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version-file: go.mod
 
       # The tag tests build real files and read them back with ffprobe; without
       # ffmpeg they would quietly skip themselves.
@@ -22,7 +22,7 @@ jobs:
 
       - name: Build the phone agent
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath \
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -buildvcs=false \
             -ldflags="-s -w" -o internal/device/agent/mlm-agent-arm64 ./cmd/agent
 
       - name: Check formatting

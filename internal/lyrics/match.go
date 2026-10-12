@@ -562,6 +562,15 @@ var recordingWords = map[string]bool{
 // recording this is, or holds a year, is no name.
 func aliases(title string) []string {
 	var out []string
+	// "Around Me x Clout": two songs cut together, each searched for by its
+	// own name.
+	if parts := strings.Split(bareTitle(title), " x "); len(parts) > 1 {
+		for _, part := range parts {
+			if part = strings.TrimSpace(part); len([]rune(part)) >= 3 {
+				out = append(out, part)
+			}
+		}
+	}
 	for _, aside := range bracketedAside.FindAllString(cleanTitle(title), -1) {
 		inner := strings.TrimSpace(aside[1 : len(aside)-1])
 		ws := words(inner)

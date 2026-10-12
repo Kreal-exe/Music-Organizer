@@ -12,6 +12,8 @@ Windows · macOS · works directly on an Android phone over adb
 
 ---
 
+<p align="center"><img src="docs/screenshot.png" width="900" alt="Music Library Organizer: the artist list of a library"></p>
+
 A player builds its artist list out of whatever is written in the tags, not out
 of what you think you own. So a library of thirteen artists shows up as
 fifty-eight:
@@ -28,6 +30,23 @@ This tool reads the whole collection, shows the list as it would be, and lets
 you fold it down to what you meant — then writes it back. Nothing is written
 until you press **Apply**, and **Show changes** prints, file by file, what is
 about to happen.
+
+## Download
+
+Get the latest build from [Releases](../../releases/latest):
+
+| | Windows | macOS |
+|---|---|---|
+| File | `MusicLibraryOrganizer-<version>-windows-amd64.exe` | `MusicLibraryOrganizer-<version>-macos-universal.zip` |
+| System | Windows 10 or 11, 64-bit, with [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (Windows 11 has it) | macOS 12 or later, Apple Silicon or Intel |
+| Install | one `.exe`, nothing to install: run it | unzip, drag `MusicLibraryOrganizer.app` to *Applications* |
+
+**macOS:** the build is not notarized, so macOS says it "could not verify" the app. Remove the quarantine flag and launch it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MusicLibraryOrganizer.app
+open /Applications/MusicLibraryOrganizer.app
+```
 
 ## What it does
 
@@ -318,14 +337,19 @@ the song.
 
 ## Building
 
-You need [Go](https://go.dev/dl/) 1.21+ and the Wails CLI:
+You need [Go](https://go.dev/dl/) and nothing else — no Wails CLI, no npm. The
+interface is plain HTML, CSS and JavaScript in `frontend/dist`, embedded into
+the application as it is.
+
+**macOS** also needs the Xcode command line tools (`xcode-select --install`):
 
 ```
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+./build.sh          # builds it, installs /Applications/MusicLibraryOrganizer.app and opens it
+./build.sh --zip    # the same, plus dist/MusicLibraryOrganizer-<version>-macos-universal.zip
 ```
 
-The interface is plain HTML, CSS and JavaScript in `frontend/dist`, so there is
-no npm, no Node and no bundler step.
+`INSTALL_DIR=~/Applications ./build.sh` installs somewhere else. A copy that is
+running is quit first and opened again afterwards.
 
 **Windows** — in PowerShell:
 
@@ -337,60 +361,59 @@ Windows refuses to run scripts until told otherwise. Either allow your own once
 with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run it with
 `powershell -ExecutionPolicy Bypass -File .\build.ps1`.
 
-The result, `Music Library Organizer.exe` in the root of the project, needs
+The result, `Music Library Organizer.exe` on the Desktop (opened right away), needs
 nothing else but WebView2, which Windows 11 already has and Windows 10 takes
-[from here](https://developer.microsoft.com/microsoft-edge/webview2/).
+[from here](https://developer.microsoft.com/microsoft-edge/webview2/). The
+icon, version and manifest are linked in by
+[go-winres](https://github.com/tc-hib/go-winres), which `go run` fetches.
 
-**macOS** needs the Xcode command line tools (`xcode-select --install`) and
-`~/go/bin` on the `PATH`, where `go install` puts `wails`:
-
-```
-./build.sh          # builds it and installs /Applications/MusicLibraryOrganizer.app
-./build.sh run      # the same, then opens it
-./build.sh zip      # dist/…-macos-universal.zip, signed, for a release
-```
-
-`build.sh` installs the Wails CLI if it is missing and runs `make mac` or
-`make mac-zip`, which work just as well on their own.
-
-Both scripts do the same things in the same order. The agent is embedded into
-the application, so it is built first:
+Both scripts are plain `go build` calls and read top to bottom. They copy the
+project to a temporary folder and build there, so the project never gets build
+output, and on a Mac the application is signed outside iCloud Drive, which
+gives every file it syncs Finder attributes `codesign` refuses. The agent is
+embedded into the application, so it is built first:
 
 ```
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
-    -o internal/device/agent/mlm-agent-arm64 ./cmd/agent
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" -o internal/device/agent/mlm-agent-arm64 ./cmd/agent
 ```
 
-Then the project is copied to a temporary folder, `packaging/` — the icon,
-`Info.plist`, the Windows manifest — becomes the `build/` folder Wails expects
-there, and `wails build` runs in the copy. So the project never gets a build
-folder, and on a Mac the application is signed outside iCloud Drive, which
-gives every file it syncs Finder attributes `codesign` refuses.
+then the application, with the tags a Wails release build needs:
 
-A `.app` can only be built on a Mac — Apple does not allow
-cross-compiling to its own platform. The Go toolchain builds for macOS 13 or
-newer.
+```
+go build -trimpath -buildvcs=false -tags desktop,production -ldflags="-w -s" .
+```
 
-For development, `make dev`, which fills `build/` from `packaging/` first.
+On a Mac that runs once for `arm64` and once for `amd64`, `lipo` joins the two,
+and the script writes `Info.plist`, makes the icon from `packaging/appicon.png`
+and signs the bundle ad hoc. A `.app` can only be built on a Mac — Apple does
+not allow cross-compiling to its own platform. The Go toolchain builds for
+macOS 13 or newer.
 
-**Releases** build themselves. Set `productVersion` in `wails.json`, commit,
-and push an annotated tag whose message is the release text:
+**Releases** build themselves. Set `productVersion` in `wails.json` (the one
+place the version is kept), commit, and push an annotated tag whose message is
+the release text:
 
 ```
 git tag -a v1.0.4 -F notes.md && git push origin v1.0.4
 ```
 
-GitHub Actions then builds the Windows `.exe` and the universal macOS zip and
-publishes both on the release. A tag that disagrees with `wails.json` stops
-the run before anything is built.
+GitHub Actions then runs the same two scripts and publishes the Windows `.exe`
+and the universal macOS zip on the release. A tag that disagrees with
+`wails.json` stops the run before anything is built.
 
 Keep the checkout out of iCloud Drive. It syncs `.git` too, and after a commit
 it leaves empty copies of git's object folders — `10`, `2f`, `d0` and so on —
 in the root of the project.
 
-The icon is generated rather than drawn:
-`make icon` (on a Mac: it is drawn with AppKit, from the `music.note.list`
-symbol) rewrites `packaging/appicon.png` and `packaging/windows/icon.ico`.
+The icon is generated rather than drawn, on a Mac, with AppKit from the
+`music.note.list` symbol; it rewrites `packaging/appicon.png` and
+`packaging/windows/icon.ico`:
+
+```
+clang -fobjc-arc -framework Cocoa tools/icon/make_icon.m -o "$TMPDIR/make_icon"
+"$TMPDIR/make_icon" packaging
+```
 
 ## Tests
 

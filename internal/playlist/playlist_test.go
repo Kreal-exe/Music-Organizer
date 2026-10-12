@@ -104,6 +104,16 @@ func TestITunesExportToAndroid(t *testing.T) {
 	if got == norm.NFC.String(want) {
 		t.Error("the name was rewritten in the composed form")
 	}
+
+	// Saved on the Mac to be copied to a phone, where the file arrives named
+	// with "й" as one letter: a line spelled the Mac's way is not matched.
+	composed := string(Write(Android, "Favourites", Composed(found), folder, false))
+	if composed != norm.NFC.String(want) {
+		t.Errorf("Android playlist for a phone:\n%q\nwant\n%q", composed, norm.NFC.String(want))
+	}
+	if !norm.NFD.IsNormalString(found[0].Path) {
+		t.Error("Composed changed the tracks it was given")
+	}
 }
 
 func TestAmbiguousNames(t *testing.T) {

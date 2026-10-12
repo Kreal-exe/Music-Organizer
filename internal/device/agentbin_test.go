@@ -48,7 +48,7 @@ func TestAgentIsNotStale(t *testing.T) {
 			}
 			if info.ModTime().Sub(binary.ModTime()) > slack {
 				t.Errorf("%s is newer than the embedded agent — rebuild it:\n"+
-					"  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath "+
+					"  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -buildvcs=false "+
 					`-ldflags="-s -w" -o internal/device/agent/mlm-agent-arm64 ./cmd/agent`,
 					filepath.Join(root, name))
 			}

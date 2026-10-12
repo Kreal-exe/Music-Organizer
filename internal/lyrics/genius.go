@@ -437,7 +437,7 @@ func (g *genius) byAddress(ctx context.Context, q Query) []Match {
 			if address == "" {
 				continue
 			}
-			if tried++; tried > 4 {
+			if tried++; tried > 2 {
 				return nil
 			}
 			lyrics, err := g.fetchLyrics(ctx, "https://genius.com/"+address+"-lyrics")

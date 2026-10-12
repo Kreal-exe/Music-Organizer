@@ -457,6 +457,11 @@ func (a *App) SavePlaylists(request PlaylistSave) ([]PlaylistSaved, error) {
 			}
 		default:
 			result.File = filepath.FromSlash(file)
+			// A playlist for Android saved here goes to the phone with the
+			// music, whose names arrive there composed.
+			if info.ID == playlist.Android {
+				found = playlist.Composed(found)
+			}
 			data := playlist.Write(info.ID, name, found, folder, runtime.GOOS == "windows")
 			if err := writeKeepingOld(result.File, data, request.Backup); err != nil {
 				result.Error = err.Error()

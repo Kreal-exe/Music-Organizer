@@ -323,7 +323,7 @@ func readMoov(r io.ReaderAt, size int64) (at, length int64, buf []byte, err erro
 			}
 			boxLen = int64(binary.BigEndian.Uint64(head[8:]))
 		}
-		if boxLen < 8 || off+boxLen > size {
+		if boxLen < 8 || boxLen > size-off { // no off+boxLen: a 64-bit length can overflow it
 			if off == 0 {
 				// Nothing at the very start of the file is a box at all, which
 				// is what an unfinished download looks like: the first part of
