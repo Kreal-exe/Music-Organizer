@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Bracketed asides that describe the recording rather than name the song.
@@ -181,7 +183,10 @@ func dropWatermark(artist string) string {
 }
 
 func fold(s string) string {
-	return punctuation.ReplaceAllString(strings.ToLower(strings.TrimSpace(s)), "")
+	// Russian prints "ё" as "е" as often as not: "Солнце взойдет" is Genius's
+	// "Солнце взойдёт".
+	s = strings.NewReplacer("ё", "е", "Ё", "е").Replace(strings.ToLower(strings.TrimSpace(s)))
+	return punctuation.ReplaceAllString(s, "")
 }
 
 // score rates how well a candidate matches the query, from 0 to 1.
@@ -229,6 +234,12 @@ func score(q Query, candidate Match) float64 {
 	if shared := 0.9 * wordOverlap(q.Title, candidate.Title); shared > title {
 		title = shared
 	}
+	// On the same album under the same name: the source checked that, and it
+	// is as good as the artist's name — a joint album files a song under one
+	// of the two artists, and the tag often names the other.
+	if candidate.SameAlbum && artist < sameAlbumArtistScore {
+		artist = sameAlbumArtistScore
+	}
 	// Named after its hook: the source already checked that the words repeat
 	// the title, which is as good as a close name.
 	if candidate.Hook && title < hookTitleScore {
@@ -273,7 +284,14 @@ func withoutLeadingArtist(title string, artists []string) string {
 		if artist == "" {
 			continue
 		}
-		for _, separator := range []string{" - ", " — ", " – ", " -- "} {
+		// A file name often runs the two together: "семьсот семь-Пропущенный".
+		// Only a name of some length is taken off that way, or "Jay-Z" by Jay
+		// would be searched for as "Z".
+		separators := []string{" - ", " — ", " – ", " -- "}
+		if utf8.RuneCountInString(artist) >= 5 {
+			separators = append(separators, "-", "–", "—")
+		}
+		for _, separator := range separators {
 			prefix := artist + separator
 			if len(title) > len(prefix) && strings.EqualFold(title[:len(prefix)], prefix) {
 				return strings.TrimSpace(title[len(prefix):])
@@ -426,9 +444,10 @@ func tidyLyrics(text string) string {
 // has to come round this often: a line said once is not what a song is named
 // after.
 const (
-	hookTitleScore  = 0.85
-	defaultMinScore = 0.62
-	minHookRepeats  = 3
+	sameAlbumArtistScore = 0.85
+	hookTitleScore       = 0.85
+	defaultMinScore      = 0.62
+	minHookRepeats       = 3
 )
 
 // hookAttempt says whether a search is worth repeating by the title alone:
@@ -462,4 +481,50 @@ func hookCount(lyrics, phrase string) int {
 		return 0
 	}
 	return strings.Count(norm(lyrics), p)
+}
+
+// translation is a bracketed name in the Latin alphabet at the end of a name
+// in another one: Genius writes "Пропущенный (Missed)" and "семьсот семь
+// (sem’sot sem’)".
+var translation = regexp.MustCompile(`\s*[(\[]([^()\[\]]*)[)\]]\s*$`)
+
+// withoutTranslation drops the translations a database adds to names written
+// in another alphabet, so that they compare with the names in the tags.
+func withoutTranslation(name string) string {
+	for {
+		loc := translation.FindStringSubmatchIndex(name)
+		if loc == nil {
+			return name
+		}
+		rest, inside := name[:loc[0]], name[loc[2]:loc[3]]
+		if !hasNonLatin(rest) || hasNonLatin(inside) {
+			return name
+		}
+		name = strings.TrimSpace(rest)
+	}
+}
+
+func hasNonLatin(text string) bool {
+	for _, r := range text {
+		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// otherArtists are the names after the first in a credit: "Кишлак" in
+// "семьсот семь, Кишлак". The song may be filed under any of them.
+func otherArtists(credit string) []string {
+	credit = dropWatermark(credit)
+	var names []string
+	for _, sep := range []string{"|", ";", " & ", " / ", " x ", ", "} {
+		parts := strings.Split(credit, sep)
+		for _, part := range parts[1:] {
+			if part = strings.TrimSpace(part); part != "" {
+				names = append(names, part)
+			}
+		}
+	}
+	return names
 }

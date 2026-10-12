@@ -549,3 +549,50 @@ func TestHook(t *testing.T) {
 		}
 	}
 }
+
+// Genius writes a Russian name with its translation, and with "ё" where the
+// tags have "е"; neither may keep the two names apart.
+func TestGeniusNamesInAnotherAlphabet(t *testing.T) {
+	for in, want := range map[string]string{
+		"Пропущенный (Missed)":                "Пропущенный",
+		"семьсот семь (sem’sot sem’)":         "семьсот семь",
+		"Почему я иду (Why I’m Going)":        "Почему я иду",
+		"Всё будет нормально? (Will it be?)":  "Всё будет нормально?",
+		"Lucid Dreams (Forget Me)":            "Lucid Dreams (Forget Me)",
+		"Пацанский эмо-рэп 2 (Deluxe) (Боль)": "Пацанский эмо-рэп 2 (Deluxe) (Боль)",
+	} {
+		if got := withoutTranslation(in); got != want {
+			t.Errorf("withoutTranslation(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := withoutTranslations("Кишлак (Kishlak) & семьсот семь (sem’sot sem’)"); got != "Кишлак & семьсот семь" {
+		t.Errorf("withoutTranslations = %q", got)
+	}
+	if similarity("Солнце взойдет", "Солнце взойдёт") != 1 {
+		t.Error("е and ё are told apart")
+	}
+}
+
+// A file name that runs the artist into the title, and a credit with a second
+// artist the song may be filed under.
+func TestArtistsInFileNames(t *testing.T) {
+	if got := withoutLeadingArtist("семьсот семь-Пропущенный", []string{"семьсот семь"}); got != "Пропущенный" {
+		t.Errorf("withoutLeadingArtist = %q", got)
+	}
+	if got := withoutLeadingArtist("Jay-Z", []string{"Jay"}); got != "Jay-Z" {
+		t.Errorf("a short name was taken off a hyphenated one: %q", got)
+	}
+	if got := otherArtists("семьсот семь, Кишлак"); len(got) != 1 || got[0] != "Кишлак" {
+		t.Errorf("otherArtists = %q", got)
+	}
+	q := Query{Artist: "семьсот семь", Path: "/m/семьсот семь, Кишлак - раздевайся.mp3"}
+	found := false
+	for _, attempt := range attempts(q) {
+		for _, guest := range attempt.Guests {
+			found = found || guest == "Кишлак"
+		}
+	}
+	if !found {
+		t.Error("the second artist in the file name is not taken as a guest")
+	}
+}

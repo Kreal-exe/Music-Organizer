@@ -20,6 +20,7 @@ import (
 
 const (
 	geniusSearch = "https://genius.com/api/search/multi"
+	geniusSongs  = "https://genius.com/api/songs"
 	userAgent    = "MusicLibraryOrganizer/1.0 (music tagger)"
 
 	// Genius serves full pages, so both the search results and the number of
@@ -42,7 +43,9 @@ type geniusResponse struct {
 			Hits []struct {
 				Type   string `json:"type"`
 				Result struct {
+					ID            int    `json:"id"`
 					Title         string `json:"title"`
+					ArtistNames   string `json:"artist_names"`
 					URL           string `json:"url"`
 					PrimaryArtist struct {
 						Name string `json:"name"`
@@ -89,7 +92,96 @@ func (g *genius) search(ctx context.Context, q Query) ([]Match, error) {
 			matches = append(matches, hooked...)
 		}
 	}
+	// Still nothing: the song may be filed under the other artist of a joint
+	// album, which the tag does not name.
+	if q.Album != "" && !anyAccepted(q, matches) {
+		if found, err := g.byAlbum(ctx, q); err == nil {
+			matches = append(matches, found...)
+		}
+	}
 	return matches, nil
+}
+
+// byAlbum finds a song by its name alone and takes it if Genius has it on
+// the album the tags name. "Почему я иду" is tagged as Кишлак's, from his
+// joint album with семьсот семь, and Genius files it under семьсот семь: the
+// artists disagree, but a song of that name on that album is that song.
+func (g *genius) byAlbum(ctx context.Context, q Query) ([]Match, error) {
+	title := bareTitle(q.Title)
+	hits, err := g.find(ctx, title)
+	if err != nil {
+		return nil, err
+	}
+	asked := 0
+	for _, hit := range hits {
+		if hit.geniusID == 0 || similarity(title, bareTitle(hit.Title)) < 0.9 {
+			continue
+		}
+		if asked++; asked > 2 {
+			break
+		}
+		album, err := g.album(ctx, hit.geniusID)
+		if err != nil {
+			return nil, err
+		}
+		if album == "" || similarity(bareTitle(q.Album), bareTitle(withoutTranslation(album))) < 0.85 {
+			continue
+		}
+		lyrics, err := g.fetchLyrics(ctx, hit.URL)
+		if err != nil {
+			return nil, err
+		}
+		if lyrics != "" {
+			hit.Lyrics, hit.SameAlbum = lyrics, true
+			return []Match{hit}, nil
+		}
+	}
+	return nil, nil
+}
+
+// album asks Genius which album a song is on.
+func (g *genius) album(ctx context.Context, id int) (string, error) {
+	if err := g.limiter.wait(ctx); err != nil {
+		return "", err
+	}
+	resp, err := fetch(ctx, g.client, g.name(), fmt.Sprintf("%s/%d", geniusSongs, id), "application/json")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Genius replied %s", resp.Status)
+	}
+	var parsed struct {
+		Response struct {
+			Song struct {
+				Album *struct {
+					Name string `json:"name"`
+				} `json:"album"`
+			} `json:"song"`
+		} `json:"response"`
+	}
+	if err := json.NewDecoder(limitBody(resp)).Decode(&parsed); err != nil {
+		return "", fmt.Errorf("Genius: %w", err)
+	}
+	if parsed.Response.Song.Album == nil {
+		return "", nil
+	}
+	return parsed.Response.Song.Album.Name, nil
+}
+
+// withoutTranslations drops the translations from every name in a credit:
+// "Кишлак (Kishlak) & семьсот семь (sem’sot sem’)".
+func withoutTranslations(credit string) string {
+	parts := strings.Split(credit, " & ")
+	for i, part := range parts {
+		names := strings.Split(part, ", ")
+		for j, name := range names {
+			names[j] = withoutTranslation(strings.TrimSpace(name))
+		}
+		parts[i] = strings.Join(names, ", ")
+	}
+	return strings.Join(parts, " & ")
 }
 
 // byHook finds a song a leak is named after a line of. "Fuck Or Sum (Session
@@ -161,11 +253,18 @@ func (g *genius) find(ctx context.Context, text string) ([]Match, error) {
 			}
 			seen[hit.Result.URL] = true
 
+			// Every artist credited, not only the first: a joint song is
+			// filed under one of them, and the tag may name the other.
+			artist := hit.Result.ArtistNames
+			if artist == "" {
+				artist = hit.Result.PrimaryArtist.Name
+			}
 			out = append(out, Match{
-				Source: g.name(),
-				Artist: hit.Result.PrimaryArtist.Name,
-				Title:  hit.Result.Title,
-				URL:    hit.Result.URL,
+				Source:   g.name(),
+				Artist:   withoutTranslations(artist),
+				Title:    withoutTranslation(hit.Result.Title),
+				URL:      hit.Result.URL,
+				geniusID: hit.Result.ID,
 			})
 			if len(out) >= geniusCandidates {
 				return out, nil

@@ -87,6 +87,13 @@ type Match struct {
 	// Hook says the source found this song by its lyrics repeating the
 	// queried title, not by its name.
 	Hook bool `json:"-"`
+
+	// SameAlbum says the source found this song under the same name on the
+	// album the track's tags name.
+	SameAlbum bool `json:"-"`
+
+	// geniusID is the song's number on Genius, for asking about its album.
+	geniusID int
 }
 
 // provider is one lyrics source.
@@ -278,6 +285,11 @@ func attempts(q Query) []Query {
 	}
 
 	guests := guestsIn(q.Title + " " + q.Artist)
+	// "семьсот семь, Кишлак - раздевайся.mp3": a song with two names on it may
+	// be filed under the second.
+	for _, credit := range []string{q.Artist, q.AlbumArtist, fileArtist} {
+		guests = append(guests, otherArtists(credit)...)
+	}
 
 	var out []Query
 	seen := map[string]bool{}

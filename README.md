@@ -219,6 +219,16 @@ than a guess:
   Edit)`, `Devil Horns (v1)` and `Insecurities OG` return nothing anywhere;
   searched under the plain name they are all found, and another take of the
   same song is accepted as a match.
+- **The names are written another way.** Genius adds a translation to a
+  Russian name — `Пропущенный (Missed)`, `семьсот семь (sem’sot sem’)` — and
+  prints `ё` where the tags have `е`; both are set aside before names are
+  compared. A file name that runs the artist into the title,
+  `семьсот семь-Пропущенный.mp3`, is read as both.
+- **The song is filed under the other artist.** A joint song is on Genius
+  under one of its artists, and a credit such as `семьсот семь, Кишлак` names
+  both; every one of them counts. When the tag names only the other, the song
+  is searched for by its name alone and taken if Genius has it on the album
+  the tags name.
 - **The title is a line of the song.** A leak is often named after its hook:
   `Fuck Or Sum (Session Edit)` is Genius's `Extra (For Fun)`, and the two names
   share nothing. When nothing is found by name, Genius is asked for the title
