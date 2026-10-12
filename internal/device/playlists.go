@@ -136,9 +136,9 @@ func (p *Phone) ReadFile(ctx context.Context, path string) ([]byte, error) {
 
 // WritePlaylist puts a playlist file on the phone and has the media database
 // read it, then reports how many of its tracks the database matched (-1 when
-// it could not tell). A different file already there is kept beside it as
-// .bak.
-func (p *Phone) WritePlaylist(ctx context.Context, path string, data []byte, entries int) (int, error) {
+// it could not tell). With backup, a different file already there is kept
+// beside it as .bak.
+func (p *Phone) WritePlaylist(ctx context.Context, path string, data []byte, entries int, backup bool) (int, error) {
 	local, err := os.CreateTemp("", "mlm-playlist-*")
 	if err != nil {
 		return -1, err
@@ -152,7 +152,7 @@ func (p *Phone) WritePlaylist(ctx context.Context, path string, data []byte, ent
 		return -1, err
 	}
 
-	if old, err := p.ReadFile(ctx, path); err == nil && len(old) > 0 && !bytes.Equal(old, data) {
+	if old, err := p.ReadFile(ctx, path); backup && err == nil && len(old) > 0 && !bytes.Equal(old, data) {
 		if _, err := p.run(ctx, "shell", "cp -f "+shellQuote(path)+" "+shellQuote(path+".bak")); err != nil {
 			return -1, fmt.Errorf("could not keep the old playlist: %w", err)
 		}
@@ -188,14 +188,19 @@ func (p *Phone) WritePlaylist(ctx context.Context, path string, data []byte, ent
 	return best, nil
 }
 
-// SetAside takes a playlist out of every player's sight without losing it:
-// the file is renamed to .bak, and the media database is told it is gone.
-func (p *Phone) SetAside(ctx context.Context, path string) error {
-	if _, err := p.run(ctx, "shell", "mv -f "+shellQuote(path)+" "+shellQuote(path+".bak")); err != nil {
-		return fmt.Errorf("could not set the old playlist aside: %w", err)
+// SetAside takes a playlist out of every player's sight: the file is renamed
+// to .bak with keep, or removed without, and the media database is told it is
+// gone.
+func (p *Phone) SetAside(ctx context.Context, path string, keep bool) error {
+	command := "rm -f " + shellQuote(path)
+	if keep {
+		command = "mv -f " + shellQuote(path) + " " + shellQuote(path+".bak")
+	}
+	if _, err := p.run(ctx, "shell", command); err != nil {
+		return fmt.Errorf("could not take the old playlist away: %w", err)
 	}
 	if p.exists(ctx, path) {
-		return fmt.Errorf("could not set the old playlist aside")
+		return fmt.Errorf("could not take the old playlist away")
 	}
 	p.scanFile(ctx, path)
 	return nil

@@ -300,6 +300,9 @@ type PlaylistSave struct {
 	// again from scratch. Each is kept beside itself as .bak, where no player
 	// reads it.
 	Retire []string `json:"retire"`
+	// Backup keeps every playlist replaced or retired beside itself as .bak.
+	// Off unless asked for.
+	Backup bool `json:"backup"`
 }
 
 // PlaylistSaved is how one playlist came out.
@@ -402,9 +405,13 @@ func (a *App) SavePlaylists(request PlaylistSave) ([]PlaylistSaved, error) {
 		var err error
 		switch {
 		case from.where == "phone" && phone != nil:
-			err = phone.SetAside(ctx, from.path)
+			err = phone.SetAside(ctx, from.path, request.Backup)
 		case from.where == "computer" && from.path != "" && filepath.IsAbs(from.path):
-			err = os.Rename(from.path, from.path+".bak")
+			if request.Backup {
+				err = os.Rename(from.path, from.path+".bak")
+			} else {
+				err = os.Remove(from.path)
+			}
 		default:
 			continue
 		}
@@ -445,13 +452,13 @@ func (a *App) SavePlaylists(request PlaylistSave) ([]PlaylistSaved, error) {
 			result.Error = "none of its tracks was found, so nothing was written"
 		case phone != nil:
 			data := playlist.Write(info.ID, name, found, folder, false)
-			if result.Visible, err = phone.WritePlaylist(ctx, file, data, len(found)); err != nil {
+			if result.Visible, err = phone.WritePlaylist(ctx, file, data, len(found), request.Backup); err != nil {
 				result.Error = err.Error()
 			}
 		default:
 			result.File = filepath.FromSlash(file)
 			data := playlist.Write(info.ID, name, found, folder, runtime.GOOS == "windows")
-			if err := writeKeepingOld(result.File, data); err != nil {
+			if err := writeKeepingOld(result.File, data, request.Backup); err != nil {
 				result.Error = err.Error()
 			}
 		}
@@ -466,15 +473,17 @@ func (a *App) finishedPlaylists() {
 	wr.EventsEmit(a.ctx, "playlists:phase", "")
 }
 
-// writeKeepingOld writes a file in one piece. A different file already there
-// is kept beside it as .bak, so saving over a playlist never loses it.
-func writeKeepingOld(file string, data []byte) error {
+// writeKeepingOld writes a file in one piece. With backup, a different file
+// already there is kept beside it as .bak.
+func writeKeepingOld(file string, data []byte, backup bool) error {
 	if old, err := os.ReadFile(file); err == nil {
 		if bytes.Equal(old, data) {
 			return nil
 		}
-		if err := os.WriteFile(file+".bak", old, 0o644); err != nil {
-			return fmt.Errorf("could not keep the old playlist: %w", err)
+		if backup {
+			if err := os.WriteFile(file+".bak", old, 0o644); err != nil {
+				return fmt.Errorf("could not keep the old playlist: %w", err)
+			}
 		}
 	}
 	temporary := file + ".part"

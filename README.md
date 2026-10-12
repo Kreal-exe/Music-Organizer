@@ -82,14 +82,17 @@ phone actually shows.
 | Player | Written as |
 |---|---|
 | Android — Phonograph, Phonograph Plus, Poweramp, Samsung Music, Musicolet, VLC, AIMP, Retro Music, Pulsar, BlackPlayer, Oto Music, GoneMAD, Neutron, Vinyl, Auxio, foobar2000 | `.m3u`, UTF-8, paths from the playlist's folder |
-| iTunes and Music, Mac and Windows | `.txt`, the table they export, UTF-16 with absolute paths — *File → Library → Import Playlist* |
+| iTunes and Music, Mac and Windows | `.xml`, the playlist they export themselves — *File → Library → Import Playlist* |
 | VLC, foobar2000, AIMP, Winamp, MusicBee | `.m3u8` with titles and lengths |
 | Windows Media Player | `.wpl` |
 | Strawberry, Clementine, VLC | `.xspf` |
 | Winamp and older players | `.pls` |
 
-All of these are read as well, along with an iTunes library exported as XML
-(every playlist in it) and an old `.m3u` in a Windows code page.
+All of these are read as well, along with the text export of iTunes and Music,
+an iTunes library exported as XML (every playlist in it) and an old `.m3u` in
+a Windows code page. Their text export is read but not written: Music turns
+down a table without the columns it writes itself — size, kind, dates — so
+what goes back to it is their XML.
 
 **Find in the library** needs no export at all: on a Mac it asks the Music
 application for every playlist made there, smart ones included (macOS asks
@@ -100,9 +103,8 @@ all its tracks says so, and a click on the count lists the ones missing.
 The list is grouped by format — iTunes and Music, Android, and the rest — with
 a box to tick a whole group. When playlists for the chosen player already lie
 where the new ones go, they can be updated (one saved under the same name
-replaces the old, the rest stay) or started over (all of them are set aside
-as `.bak` first, where no player reads them, on the phone or on this
-computer).
+replaces the old, the rest stay) or started over (all of them are removed
+first, on the phone or on this computer).
 
 A playlist is only useful if every path in it is spelled the way the file is
 named, byte for byte, and that is where playlists moved by hand go wrong. macOS
@@ -116,8 +118,8 @@ as they are on its disk, on a phone as the phone lists them.
 
 Saved onto a phone, a playlist is handed to the media library at once and
 counted again until the count settles, and the result says how many tracks
-the phone shows. A different playlist of the same name is kept beside the new
-one as `.bak`, on the phone and on this computer alike.
+the phone shows. With *Keep a backup* ticked, a playlist replaced or removed is
+kept beside it as `.bak`, on the phone and on this computer alike.
 
 ## Formats
 

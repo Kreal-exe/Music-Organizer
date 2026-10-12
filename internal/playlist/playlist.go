@@ -89,7 +89,7 @@ var Targets = []TargetInfo{
 	{Android, "Android — " + androidPlayers,
 		".m3u with paths from the playlist's folder, the way Android's media library reads them — and so does every other player that takes its playlists from it", "m3u", false},
 	{ITunes, "iTunes and Music — Mac and Windows",
-		".txt, the same table they export; open it with File → Library → Import Playlist", "txt", true},
+		".xml, the playlist they export themselves; open it with File → Library → Import Playlist", "xml", true},
 	{M3U8, "VLC, foobar2000, AIMP, Winamp, MusicBee",
 		".m3u8 with each track's title and length", "m3u8", false},
 	{WPL, "Windows Media Player",

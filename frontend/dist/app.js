@@ -2658,7 +2658,7 @@ function missingList(missing) {
 
 function resultLine(result) {
   if (result.error) return el("div", "row-sub error-text", `✗ ${result.error}`);
-  if (result.retired) return el("div", "row-sub", "↷ set aside as .bak");
+  if (result.retired) return el("div", "row-sub", "↷ removed");
   let text = `→ ${baseName(result.file)}: ${result.found} of ${tracks(result.entries)}`;
   if (result.visible >= 0) text += ` · the phone shows ${result.visible}`;
   return el("div", result.found < result.entries ? "row-sub warn-text" : "row-sub ok-text", text);
@@ -2782,6 +2782,7 @@ $("pl-save").addEventListener("click", async () => {
     destination: destination(),
     folder: destination() === "folder" ? lists.folder : destination() === "phone" ? $("pl-phone-folder").value.trim() : "",
     serial: destination() === "phone" && lists.phone ? lists.phone.serial : "",
+    backup: $("pl-backup").checked,
     retire: $("pl-existing").hidden || !document.querySelector('input[name="pl-mode"][value="replace"]').checked
       ? [] : existingPlaylists().map((item) => item.id),
   };
@@ -2818,7 +2819,7 @@ window.runtime.EventsOn("playlists:saved", (result) => {
   const log = $("pl-log");
   if (result.retired) {
     log.append(el("div", result.error ? "error" : "note", result.error
-      ? `✗ ${result.file}: could not set it aside — ${result.error}` : `↷ ${result.file} set aside as .bak`));
+      ? `✗ ${result.file}: could not remove it — ${result.error}` : `↷ ${result.file} removed`));
     return;
   }
   if (result.error) {

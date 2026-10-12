@@ -57,8 +57,8 @@ func TestPlaylistsCountWhatThePhoneShows(t *testing.T) {
 	}
 }
 
-// A playlist written over a different one keeps the old file as .bak; the
-// same playlist written again leaves nothing behind.
+// A playlist written over a different one keeps the old file as .bak when
+// backups are asked for; the same playlist written again leaves nothing behind.
 func TestWritePlaylist(t *testing.T) {
 	for _, tc := range []struct {
 		old    string
@@ -72,7 +72,7 @@ func TestWritePlaylist(t *testing.T) {
 		phone := &Phone{adb: adb, Serial: "X"}
 
 		data := []byte("#EXTM3U\na.mp3\nb.mp3\n")
-		visible, err := phone.WritePlaylist(context.Background(), "/sdcard/Music/Mix.m3u", data, 2)
+		visible, err := phone.WritePlaylist(context.Background(), "/sdcard/Music/Mix.m3u", data, 2, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,6 +88,23 @@ func TestWritePlaylist(t *testing.T) {
 		}
 		if backedUp != tc.backup {
 			t.Errorf("old %q: backed up %v, want %v", tc.old, backedUp, tc.backup)
+		}
+	}
+}
+
+func TestWritePlaylistWithoutBackup(t *testing.T) {
+	adb := &fakeADB{replies: map[string]string{
+		"cat '/sdcard/Music/Mix.m3u'": "#EXTM3U\nold.mp3\n",
+		"--projection _id:_data":      "Row: 0 _id=7, _data=/storage/emulated/0/Music/Mix.m3u\n",
+		"playlists/7/members":         "Row: 0 audio_id=1\n",
+	}}
+	phone := &Phone{adb: adb, Serial: "X"}
+	if _, err := phone.WritePlaylist(context.Background(), "/sdcard/Music/Mix.m3u", []byte("#EXTM3U\na.mp3\n"), 1, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range adb.calls {
+		if strings.Contains(call, ".bak") {
+			t.Errorf("a backup was made: %s", call)
 		}
 	}
 }

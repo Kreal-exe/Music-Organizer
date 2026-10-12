@@ -269,9 +269,12 @@
           <label class="choice"><input type="radio" name="pl-mode" value="update" checked />
             <span><b>Update them</b><em>a playlist saved under the same name replaces the old one; the rest stay as they are</em></span></label>
           <label class="choice"><input type="radio" name="pl-mode" value="replace" />
-            <span><b>Start over</b><em>all of them are set aside first — each kept as .bak, where no player reads it — then the new ones are saved</em></span></label>
+            <span><b>Start over</b><em>all of them are removed first, then the new ones are saved</em></span></label>
         </div>
       </div>
+
+      <label class="check"><input type="checkbox" id="pl-backup" />
+        <span><b>Keep a backup of every playlist replaced or removed</b><em>as .bak beside it, where no player reads it</em></span></label>
 
       <div class="toolbar save-row">
         <button id="pl-save" class="btn primary" disabled>Save playlists</button>

@@ -3,12 +3,8 @@ package playlist
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"path"
-	"path/filepath"
-	"runtime"
 	"strings"
-	"unicode/utf16"
 )
 
 // Relative is the path of file seen from folder ("../Other/a.mp3"), both
@@ -91,73 +87,62 @@ func Write(target Target, name string, tracks []Track, folder string, windows bo
 		b.WriteString("        </seq>\n    </body>\n</smil>\n")
 
 	case ITunes:
-		return iTunesText(tracks, windows)
+		return iTunesXML(name, tracks, windows)
 	}
 	return []byte(b.String())
 }
 
-// iTunesHeader is the row iTunes and Music export, column for column.
-var iTunesHeader = []string{"Name", "Artist", "Composer", "Album", "Grouping", "Work", "Movement Number", "Movement Count",
-	"Movement Name", "Genre", "Size", "Time", "Disc Number", "Disc Count", "Track Number", "Track Count", "Year",
-	"Date Modified", "Date Added", "Bit Rate", "Sample Rate", "Volume Adjustment", "Kind", "Equalizer", "Comments",
-	"Plays", "Last Played", "Skips", "Last Skipped", "My Rating", "Location"}
-
-// iTunesText writes the table iTunes and Music export and import: UTF-16 with
-// a byte order mark, a line per track, carriage returns between lines.
-func iTunesText(tracks []Track, windows bool) []byte {
-	var rows []string
-	rows = append(rows, strings.Join(iTunesHeader, "\t"))
-	for _, track := range tracks {
-		columns := make([]string, len(iTunesHeader))
-		columns[0] = titleOf(track)
-		columns[1] = oneLine(track.Entry.Artist)
+// iTunesXML writes a playlist the way Music and iTunes export one as XML
+// (File → Library → Export Playlist), which both import on a Mac and on
+// Windows. Their text export is no way back in: Music turns down a table
+// that lacks any of the columns it writes itself — size, kind, dates — and
+// those are not the playlist's to know.
+func iTunesXML(name string, tracks []Track, windows bool) []byte {
+	var b strings.Builder
+	b.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+		"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
+		"<plist version=\"1.0\">\n<dict>\n" +
+		"\t<key>Major Version</key><integer>1</integer>\n" +
+		"\t<key>Minor Version</key><integer>1</integer>\n" +
+		"\t<key>Application Version</key><string>1.0</string>\n" +
+		"\t<key>Tracks</key>\n\t<dict>\n")
+	for i, track := range tracks {
+		fmt.Fprintf(&b, "\t\t<key>%d</key>\n\t\t<dict>\n\t\t\t<key>Track ID</key><integer>%d</integer>\n", i+1, i+1)
+		fmt.Fprintf(&b, "\t\t\t<key>Name</key><string>%s</string>\n", escape(titleOf(track)))
+		if track.Entry.Artist != "" {
+			fmt.Fprintf(&b, "\t\t\t<key>Artist</key><string>%s</string>\n", escape(oneLine(track.Entry.Artist)))
+		}
 		if track.Entry.Duration > 0 {
-			columns[11] = fmt.Sprint(track.Entry.Duration)
+			fmt.Fprintf(&b, "\t\t\t<key>Total Time</key><integer>%d</integer>\n", track.Entry.Duration*1000)
 		}
-		columns[len(columns)-1] = ITunesLocation(track.Path, windows)
-		rows = append(rows, strings.Join(columns, "\t"))
+		fmt.Fprintf(&b, "\t\t\t<key>Location</key><string>%s</string>\n\t\t</dict>\n", escape(FileURL(track.Path, windows)))
 	}
-	units := utf16.Encode([]rune(strings.Join(rows, "\r") + "\r"))
-	out := make([]byte, 2, 2+2*len(units))
-	out[0], out[1] = 0xFF, 0xFE
-	for _, unit := range units {
-		out = append(out, byte(unit), byte(unit>>8))
+	fmt.Fprintf(&b, "\t</dict>\n\t<key>Playlists</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>Name</key><string>%s</string>\n"+
+		"\t\t\t<key>Playlist Items</key>\n\t\t\t<array>\n", escape(name))
+	for i := range tracks {
+		fmt.Fprintf(&b, "\t\t\t\t<dict><key>Track ID</key><integer>%d</integer></dict>\n", i+1)
 	}
-	return out
+	b.WriteString("\t\t\t</array>\n\t\t</dict>\n\t</array>\n</dict>\n</plist>\n")
+	return []byte(b.String())
 }
 
-// ITunesLocation is a path the way iTunes writes it: "C:\Users\me\Music\a.mp3"
-// on Windows, and on a Mac the volume's name followed by the path on that
-// volume — "Macintosh HD/Users/me/Music/a.mp3".
-func ITunesLocation(file string, windows bool) string {
+// FileURL is a file's location as iTunes and Music write it:
+// "file:///Users/me/Music/a%20b.mp3", or "file://localhost/C:/Music/a%20b.mp3"
+// on Windows. The name is percent-encoded byte for byte, so it stays spelled
+// exactly as the file is.
+func FileURL(file string, windows bool) string {
+	parts := strings.Split(strings.ReplaceAll(file, `\`, "/"), "/")
+	for i, part := range parts {
+		if windows && i == 0 && len(part) == 2 && part[1] == ':' {
+			continue // The drive letter's colon stays as it is.
+		}
+		parts[i] = url.PathEscape(part)
+	}
+	joined := strings.Join(parts, "/")
 	if windows {
-		return strings.ReplaceAll(file, "/", `\`)
+		return "file://localhost/" + strings.TrimPrefix(joined, "/")
 	}
-	if rest, found := strings.CutPrefix(file, "/Volumes/"); found {
-		return rest
-	}
-	return bootVolumeName() + file
-}
-
-// bootVolumeName finds the startup disk's name: /Volumes holds a link to "/"
-// under that name.
-func bootVolumeName() string {
-	if runtime.GOOS != "darwin" {
-		return ""
-	}
-	entries, err := os.ReadDir("/Volumes")
-	if err != nil {
-		return "Macintosh HD"
-	}
-	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink == 0 {
-			continue
-		}
-		if target, err := filepath.EvalSymlinks(path.Join("/Volumes", entry.Name())); err == nil && target == "/" {
-			return entry.Name()
-		}
-	}
-	return "Macintosh HD"
+	return "file://" + joined
 }
 
 func titleOf(track Track) string {

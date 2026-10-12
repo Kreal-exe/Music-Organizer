@@ -31,6 +31,13 @@ func musicFolder(t *testing.T) string {
 	return root
 }
 
+// iTunesHeader is the row iTunes and Music put at the top of their text
+// export, column for column.
+var iTunesHeader = []string{"Name", "Artist", "Composer", "Album", "Grouping", "Work", "Movement Number", "Movement Count",
+	"Movement Name", "Genre", "Size", "Time", "Disc Number", "Disc Count", "Track Number", "Track Count", "Year",
+	"Date Modified", "Date Added", "Bit Rate", "Sample Rate", "Volume Adjustment", "Kind", "Equalizer", "Comments",
+	"Plays", "Last Played", "Skips", "Last Skipped", "My Rating", "Location"}
+
 func utf16Export(rows ...[]string) []byte {
 	var lines []string
 	lines = append(lines, strings.Join(iTunesHeader, "\t"))
@@ -238,5 +245,17 @@ func TestRelativeAndNames(t *testing.T) {
 	}
 	if got := SafeName(`AC/DC: "Best"?`); got != "AC-DC- -Best--" {
 		t.Errorf("SafeName = %q", got)
+	}
+}
+
+func TestFileURL(t *testing.T) {
+	if got := FileURL("/Users/me/Music/"+decomposed, false); got != "file:///Users/me/Music/%D0%9A%D0%B8%D1%88%D0%BB%D0%B0%D0%BA/%D0%A2%D0%B0%D0%BD%D1%86%D1%83%D0%B8%CC%86.mp3" {
+		t.Errorf("mac: %s", got)
+	}
+	if got := FileURL("C:/Users/me/Music/a b.mp3", true); got != "file://localhost/C:/Users/me/Music/a%20b.mp3" {
+		t.Errorf("windows: %s", got)
+	}
+	if got := pathFromLocation(FileURL("/x/"+decomposed, false)); got != "/x/"+decomposed {
+		t.Errorf("round trip: %q", got)
 	}
 }
