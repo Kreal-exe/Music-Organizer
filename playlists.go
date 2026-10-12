@@ -46,8 +46,10 @@ type PlaylistItem struct {
 	Where   string `json:"where"`
 	Path    string `json:"path"`
 	Entries int    `json:"entries"`
-	// Found is how many of its tracks are in the open library.
-	Found int `json:"found"`
+	// Found is how many of its tracks are in the open library, and Missing
+	// the ones that are not.
+	Found   int              `json:"found"`
+	Missing []playlist.Entry `json:"missing"`
 	// Visible is how many of them the phone shows, for a playlist on a
 	// phone; -1 otherwise.
 	Visible int `json:"visible"`
@@ -109,10 +111,13 @@ func (a *App) keep(ctx context.Context, read []playlist.Playlist, where, file st
 		id := strconv.Itoa(a.lists.next)
 		a.lists.read[id] = list
 		item := PlaylistItem{ID: id, Name: list.Name, Format: list.Format, Where: where, Path: file,
-			Entries: len(list.Entries), Found: -1, Visible: visible}
+			Entries: len(list.Entries), Found: -1, Missing: []playlist.Entry{}, Visible: visible}
 		if index != nil {
-			found, _ := index.Find(list)
+			found, missing := index.Find(list)
 			item.Found = len(found)
+			if missing != nil {
+				item.Missing = missing
+			}
 		}
 		items = append(items, item)
 	}
@@ -159,8 +164,9 @@ func (a *App) readFiles(files []string) ([]PlaylistItem, error) {
 	return items, nil
 }
 
-// LibraryPlaylists finds the playlists inside the open library: the playlist
-// files in its folder, or every playlist on the phone it is on.
+// LibraryPlaylists finds the playlists of the open library: those of the
+// Music application on a Mac (iTunes on Windows), then the playlist files in
+// the library's folder — or, for a library on a phone, every playlist there.
 func (a *App) LibraryPlaylists() ([]PlaylistItem, error) {
 	a.mu.Lock()
 	lib, phone := a.lib, a.phone
@@ -168,8 +174,19 @@ func (a *App) LibraryPlaylists() ([]PlaylistItem, error) {
 	if lib == nil {
 		return nil, errors.New("open a library first")
 	}
+
+	items := []PlaylistItem{}
+	ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
+	defer cancel()
+	app, appErr := playlist.FromMusicApp(ctx)
+	items = append(items, a.keep(ctx, app, "computer", musicAppName(), -1)...)
+
 	if phone != nil {
-		return a.phonePlaylists(phone)
+		found, err := a.phonePlaylists(phone)
+		if err != nil {
+			return items, err
+		}
+		return append(items, found...), nil
 	}
 
 	var files []string
@@ -188,14 +205,25 @@ func (a *App) LibraryPlaylists() ([]PlaylistItem, error) {
 		}
 		return nil
 	})
-	items := []PlaylistItem{}
 	for _, file := range files {
 		// A text file that is not an iTunes export is simply not a playlist.
 		if read, err := playlist.Read(file); err == nil && len(read) > 0 {
 			items = append(items, a.keep(a.ctx, read, "computer", file, -1)...)
 		}
 	}
+	// Music not answering is worth saying only when nothing else was found.
+	if len(items) == 0 && appErr != nil {
+		return items, appErr
+	}
 	return items, nil
+}
+
+// musicAppName is what the list shows as where the Music playlists came from.
+func musicAppName() string {
+	if runtime.GOOS == "darwin" {
+		return "the Music app"
+	}
+	return "iTunes"
 }
 
 // PhonePlaylists reads the playlists on a phone, with how many of their

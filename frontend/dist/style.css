@@ -1122,3 +1122,21 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
 .choice em.row .search { max-width: 300px; padding: 5px 9px; }
 .save-row { margin-top: 18px; }
 #pl-dest-note { margin-top: 10px; }
+
+button.badge.clickable { border: none; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+button.badge.clickable:hover { filter: none; outline: 1px solid var(--warn); }
+.missing-list {
+  overflow-y: auto;
+  max-height: 260px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 12.5px;
+  user-select: text;
+}
+.missing-head { margin-bottom: 6px; color: var(--warn); font-size: 11.5px; font-weight: 600; }
+.missing-entry { padding: 4px 0; border-top: 1px solid var(--line-soft); }
+.missing-entry:first-of-type { border-top: none; }
+.missing-entry .row-sub.path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -81,7 +81,7 @@ phone actually shows.
 
 | Player | Written as |
 |---|---|
-| Android — Phonograph, Poweramp, Samsung Music, Musicolet… | `.m3u`, UTF-8, paths from the playlist's folder |
+| Android — Phonograph, Phonograph Plus, Poweramp, Samsung Music, Musicolet, VLC, AIMP, Retro Music, Pulsar, BlackPlayer, Oto Music, GoneMAD, Neutron, Vinyl, Auxio, foobar2000 | `.m3u`, UTF-8, paths from the playlist's folder |
 | iTunes and Music, Mac and Windows | `.txt`, the table they export, UTF-16 with absolute paths — *File → Library → Import Playlist* |
 | VLC, foobar2000, AIMP, Winamp, MusicBee | `.m3u8` with titles and lengths |
 | Windows Media Player | `.wpl` |
@@ -90,6 +90,12 @@ phone actually shows.
 
 All of these are read as well, along with an iTunes library exported as XML
 (every playlist in it) and an old `.m3u` in a Windows code page.
+
+**Find in the library** needs no export at all: on a Mac it asks the Music
+application for every playlist made there, smart ones included (macOS asks
+once whether this application may control Music), and on Windows it reads the
+library file iTunes keeps beside its library. A playlist that does not find
+all its tracks says so, and a click on the count lists the ones missing.
 
 A playlist is only useful if every path in it is spelled the way the file is
 named, byte for byte, and that is where playlists moved by hand go wrong. macOS

@@ -81,10 +81,13 @@ type TargetInfo struct {
 	Absolute bool `json:"absolute"`
 }
 
+// androidPlayers are the Android players that read an .m3u, by name.
+const androidPlayers = "Phonograph, Phonograph Plus, Poweramp, Samsung Music, Musicolet, VLC, AIMP, Retro Music, Pulsar, BlackPlayer, Oto Music, GoneMAD, Neutron, Vinyl, Auxio, foobar2000"
+
 // Targets lists the targets in the order they are offered.
 var Targets = []TargetInfo{
-	{Android, "Android — Phonograph, Poweramp, Samsung Music, Musicolet…",
-		".m3u with paths from the playlist's folder, the way Android's media library reads them", "m3u", false},
+	{Android, "Android — " + androidPlayers,
+		".m3u with paths from the playlist's folder, the way Android's media library reads them — and so does every other player that takes its playlists from it", "m3u", false},
 	{ITunes, "iTunes and Music — Mac and Windows",
 		".txt, the same table they export; open it with File → Library → Import Playlist", "txt", true},
 	{M3U8, "VLC, foobar2000, AIMP, Winamp, MusicBee",

@@ -2564,14 +2564,23 @@ function playlistRow(item) {
   name.title = "The name it is saved under";
   name.addEventListener("input", () => { item.saveAs = name.value; });
   const where = item.where === "phone" ? "on the phone" : "on this computer";
-  main.append(name, el("div", "row-sub path", `${item.format} · ${where} · ${item.path}`));
+  const from = item.format === "Music" || item.path === "iTunes" ? `playlist in ${item.path}` : `${item.format} · ${where} · ${item.path}`;
+  main.append(name, el("div", "row-sub path", from));
   if (item.result) main.append(resultLine(item.result));
+  if (item.showMissing && (item.missing || []).length) main.append(missingList(item.missing));
 
   const facts = el("div", "playlist-facts");
   if (item.found >= 0) {
-    const found = el("span", item.found < item.entries ? "badge certain" : "badge",
-      `${item.found} of ${tracks(item.entries)} in the library`);
-    found.title = "Tracks of the playlist found in the open library";
+    const missing = item.missing || [];
+    const found = el(missing.length ? "button" : "span", missing.length ? "badge certain clickable" : "badge",
+      `${item.found} of ${tracks(item.entries)} in the library${missing.length ? (item.showMissing ? " ▴" : " ▾") : ""}`);
+    found.title = missing.length ? "Show the tracks that are not in the library" : "Tracks of the playlist found in the open library";
+    if (missing.length) {
+      found.addEventListener("click", () => {
+        item.showMissing = !item.showMissing;
+        renderPlaylists();
+      });
+    }
     facts.append(found);
   } else {
     facts.append(el("span", "badge", tracks(item.entries)));
@@ -2584,6 +2593,21 @@ function playlistRow(item) {
 
   row.append(box, main, facts);
   return row;
+}
+
+// missingList names the entries of a playlist the library has no file for:
+// what the playlist calls the track, and the path it gives.
+function missingList(missing) {
+  const list = el("div", "missing-list");
+  list.append(el("div", "missing-head", `Not in the library (${missing.length}):`));
+  for (const entry of missing) {
+    const row = el("div", "missing-entry");
+    const label = entry.title ? (entry.artist ? `${entry.artist} — ${entry.title}` : entry.title) : baseName(entry.location);
+    row.append(el("div", "", label), el("div", "row-sub path", entry.location));
+    row.title = entry.location;
+    list.append(row);
+  }
+  return list;
 }
 
 function resultLine(result) {
