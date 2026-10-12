@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/text/unicode/norm"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -133,6 +134,10 @@ func NewFinder() *Finder {
 		rounds: [][]provider{
 			{
 				&lrclib{client: client, limiter: newLimiter(250 * time.Millisecond)},
+				// NetEase before Genius: it answers quickly, has timed words, and
+				// every track it places is one request fewer to Genius, which
+				// turns requests away after many in a row.
+				&netease{client: client, limiter: newLimiter(300 * time.Millisecond)},
 				// Genius is only asked about tracks LRCLIB could not place, and
 				// is paced more slowly because it serves full web pages.
 				pages,
@@ -324,7 +329,9 @@ func attempts(q Query) []Query {
 		seen[key] = true
 
 		attempt := q
-		attempt.Artist, attempt.Title, attempt.Guests = artist, title, guests
+		// Names read off a Mac's file names often spell "й" as two
+		// characters; a search engine given those finds other songs.
+		attempt.Artist, attempt.Title, attempt.Guests = norm.NFC.String(artist), norm.NFC.String(title), guests
 		attempt.Qualifiers = q.Qualifiers
 		out = append(out, attempt)
 	}

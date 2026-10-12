@@ -701,3 +701,71 @@ func TestCreditedSecond(t *testing.T) {
 		t.Errorf("Find = %+v, %v (score %.2f)", got, err, score(attempts(q)[0], page))
 	}
 }
+
+func TestNetEaseWords(t *testing.T) {
+	lrc := "[00:00.00] 作词 : Ерышев Илья\n[00:01.00] 作曲 : Ерышев Илья\n[00:19.46]Пропущенный вызов\n[00:22.06]И твой номер\n"
+	plain, synced, _ := neteaseWords(lrc)
+	if plain != "Пропущенный вызов\nИ твой номер" {
+		t.Errorf("plain = %q", plain)
+	}
+	if synced != "[00:19.46]Пропущенный вызов\n[00:22.06]И твой номер" {
+		t.Errorf("synced = %q", synced)
+	}
+	if plain, _, _ := neteaseWords("[00:00.00] 纯音乐，请欣赏\n"); plain != "" {
+		t.Errorf("an instrumental got words: %q", plain)
+	}
+}
+
+func TestGeniusSlug(t *testing.T) {
+	for in, want := range map[string]string{
+		"Juice WRLD Hit A Lick":                        "Juice-wrld-hit-a-lick",
+		"Syki and Juice WRLD Whimpers In The Darkness": "Syki-and-juice-wrld-whimpers-in-the-darkness",
+		"Juice WRLD Kirby's Selecta":                   "Juice-wrld-kirbys-selecta",
+		"L$D Pharaoh U Okay":                           "L-d-pharaoh-u-okay",
+		"семьсот семь Пропущенный":                     "",
+	} {
+		if got := geniusSlug(in); got != want {
+			t.Errorf("geniusSlug(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A title read off a Mac's file name, "й" as two characters, is searched for
+// the way it is usually written.
+func TestSearchesAreComposed(t *testing.T) {
+	q := Query{Artist: "семьсот семь", Path: "/m/семьсот семь-Пропущенныи\u0306.mp3"}
+	for _, attempt := range attempts(q) {
+		if attempt.Title != "Пропущенный" {
+			t.Errorf("searched for %q", attempt.Title)
+		}
+	}
+}
+
+// After a 429 the search is left alone, and the page is tried at its address.
+func TestGeniusRests(t *testing.T) {
+	g := &genius{}
+	g.rest()
+	if !g.resting() {
+		t.Fatal("not resting after a 429")
+	}
+	if _, err := g.find(context.Background(), "anything"); err == nil || !strings.Contains(err.Error(), "429") {
+		t.Errorf("find while resting: %v", err)
+	}
+}
+
+func TestNetEaseNamesMustMatch(t *testing.T) {
+	for _, c := range []struct {
+		asked, found string
+		same         bool
+	}{
+		{"O.J. Glove", "Glo’d Up", false},
+		{"Пропущенный", "Пропущенный", true},
+		{"улицы гаснут", "улицы гаснут (Prod. by røse)", true},
+		{"On the Run", "On The Run", true},
+		{"Doubled Up", "Doubled Up", true},
+	} {
+		if got := sameName(c.asked, c.found); got != c.same {
+			t.Errorf("sameName(%q, %q) = %v", c.asked, c.found, got)
+		}
+	}
+}

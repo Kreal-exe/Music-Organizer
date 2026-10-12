@@ -9,6 +9,7 @@ package lyrics
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -16,6 +17,9 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
+	"unicode"
 )
 
 const (
@@ -32,6 +36,28 @@ const (
 type genius struct {
 	client  *http.Client
 	limiter *limiter
+
+	// Once the search has answered 429 it is left alone for a while: every
+	// further request only keeps the ban going, and costs each track the
+	// retries' wait.
+	mu           sync.Mutex
+	restingUntil time.Time
+}
+
+// geniusRest is how long the search is left alone after turning a request
+// away.
+const geniusRest = 3 * time.Minute
+
+func (g *genius) resting() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return time.Now().Before(g.restingUntil)
+}
+
+func (g *genius) rest() {
+	g.mu.Lock()
+	g.restingUntil = time.Now().Add(geniusRest)
+	g.mu.Unlock()
 }
 
 func (g *genius) name() string { return "Genius" }
@@ -59,6 +85,12 @@ type geniusResponse struct {
 func (g *genius) search(ctx context.Context, q Query) ([]Match, error) {
 	hits, err := g.find(ctx, leadArtist(q.Artist)+" "+q.Title)
 	if err != nil {
+		// The search turns requests away for a while after many in a row,
+		// but the song pages are still served, at addresses made from the
+		// names — so the page the search would have led to is tried.
+		if guessed := g.byAddress(ctx, q); guessed != nil {
+			return guessed, nil
+		}
 		return nil, err
 	}
 
@@ -217,6 +249,9 @@ func (g *genius) byHook(ctx context.Context, q Query) ([]Match, error) {
 
 // find asks the search endpoint for songs matching the track.
 func (g *genius) find(ctx context.Context, text string) ([]Match, error) {
+	if g.resting() {
+		return nil, errors.New("Genius is turning requests away for a while (429 Too Many Requests)")
+	}
 	if err := g.limiter.wait(ctx); err != nil {
 		return nil, err
 	}
@@ -230,6 +265,9 @@ func (g *genius) find(ctx context.Context, text string) ([]Match, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		g.rest()
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("Genius replied %s", resp.Status)
 	}
@@ -377,4 +415,58 @@ func htmlToText(fragment string) string {
 // cannot exhaust memory.
 func limitBody(resp *http.Response) io.Reader {
 	return io.LimitReader(resp.Body, maxBodyBytes)
+}
+
+// byAddress opens the page Genius would have for the song, at the address it
+// makes from the artists' and the song's names: "Juice WRLD" and "Hit A Lick"
+// are at genius.com/Juice-wrld-hit-a-lick-lyrics, and a song with a guest
+// filed first, like Syki's with Juice WRLD, under both names.
+func (g *genius) byAddress(ctx context.Context, q Query) []Match {
+	lead := leadArtist(q.Artist)
+	credits := []string{lead}
+	for _, guest := range q.Guests {
+		credits = append(credits, lead+" and "+guest, guest+" and "+lead)
+	}
+	// Only the name this search is for: the plainer readings are searches of
+	// their own, which LRCLIB and NetEase get first and answer with timed words.
+	titles := []string{cleanTitle(q.Title)}
+	tried := 0
+	for _, title := range titles {
+		for _, credit := range credits {
+			address := geniusSlug(credit + " " + title)
+			if address == "" {
+				continue
+			}
+			if tried++; tried > 4 {
+				return nil
+			}
+			lyrics, err := g.fetchLyrics(ctx, "https://genius.com/"+address+"-lyrics")
+			if err != nil || lyrics == "" {
+				continue
+			}
+			return []Match{{Source: g.name(), Artist: lead, Title: title, Lyrics: lyrics,
+				URL: "https://genius.com/" + address + "-lyrics"}}
+		}
+	}
+	return nil
+}
+
+var slugBreak = regexp.MustCompile(`[^a-z0-9]+`)
+
+// geniusSlug writes names the way Genius puts them in its addresses, or
+// nothing for a name in another alphabet, which Genius transliterates in ways
+// that cannot be guessed.
+func geniusSlug(names string) string {
+	for _, r := range names {
+		if r > 127 && unicode.IsLetter(r) {
+			return ""
+		}
+	}
+	text := strings.ToLower(names)
+	text = strings.NewReplacer("&", " and ", "'", "", "’", "").Replace(text)
+	text = strings.Trim(slugBreak.ReplaceAllString(text, "-"), "-")
+	if text == "" {
+		return ""
+	}
+	return strings.ToUpper(text[:1]) + text[1:]
 }

@@ -204,11 +204,20 @@ Sources are asked in turn, and the first confident match wins:
 1. **[LRCLIB](https://lrclib.net)** — open, no key, no account. Good on
    released music, and it reports the track's length, which is what rules out
    a same-titled song by somebody else.
-2. **[Genius](https://genius.com)** — picks up what LRCLIB has never heard of:
-   leaks, mixtapes, unreleased tracks.
-3. **[lyrics.ovh](https://lyrics.ovh)** — asked last and only about what the
+2. **[NetEase Cloud Music](https://music.163.com)** — a large streaming
+   catalogue with an open API: Russian rap, songs listeners uploaded, words
+   timed line by line. Only a song of the very name asked for is taken.
+3. **[Genius](https://genius.com)** — picks up what the others have never heard
+   of: leaks, mixtapes, unreleased tracks. After many requests in a row Genius
+   turns its search away for a while; the app then leaves the search alone
+   for a few minutes and opens the song's page at the address Genius makes
+   from the names instead.
+4. **[lyrics.ovh](https://lyrics.ovh)** — asked last and only about what the
    other two could not place. It cannot search, only answer about a name it is
    given, so it is never allowed to answer ahead of a source that looked.
+
+Names read off a Mac's file names often spell "й" as two characters; every
+search is sent in the usual form, or the sources find other songs.
 
 A match is scored on artist and title, allowing for the junk tags collect
 (`(Official Audio)`, `[Prod. Nick Mira]`, `feat.` tails) and for how close the
