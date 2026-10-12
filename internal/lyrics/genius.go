@@ -54,7 +54,7 @@ type geniusResponse struct {
 }
 
 func (g *genius) search(ctx context.Context, q Query) ([]Match, error) {
-	hits, err := g.find(ctx, q)
+	hits, err := g.find(ctx, leadArtist(q.Artist)+" "+q.Title)
 	if err != nil {
 		return nil, err
 	}
@@ -81,17 +81,56 @@ func (g *genius) search(ctx context.Context, q Query) ([]Match, error) {
 			break
 		}
 	}
+	// Nothing by name that would be accepted: the title may be a line of
+	// the song rather than its name.
+	if hookAttempt(q) && !anyAccepted(q, matches) {
+		// A failure here costs only the extra chance, not what was found.
+		if hooked, err := g.byHook(ctx, q); err == nil {
+			matches = append(matches, hooked...)
+		}
+	}
 	return matches, nil
 }
 
+// byHook finds a song a leak is named after a line of. "Fuck Or Sum (Session
+// Edit)" is Genius's "Extra (For Fun) (Sessions)": nothing in the two names is
+// alike, and searching for artist and title together does not turn it up, but
+// the title alone finds it by its lyrics. Only a song by the same artist whose
+// words repeat the title as a hook is taken.
+func (g *genius) byHook(ctx context.Context, q Query) ([]Match, error) {
+	hook := bareTitle(q.Title)
+	hits, err := g.find(ctx, hook)
+	if err != nil {
+		return nil, err
+	}
+	opened := 0
+	for _, hit := range hits {
+		if similarity(leadArtist(q.Artist), leadArtist(hit.Artist)) < 0.9 {
+			continue
+		}
+		if opened++; opened > 2 {
+			break
+		}
+		lyrics, err := g.fetchLyrics(ctx, hit.URL)
+		if err != nil {
+			return nil, err
+		}
+		if hookCount(lyrics, hook) >= minHookRepeats {
+			hit.Lyrics, hit.Hook = lyrics, true
+			return []Match{hit}, nil
+		}
+	}
+	return nil, nil
+}
+
 // find asks the search endpoint for songs matching the track.
-func (g *genius) find(ctx context.Context, q Query) ([]Match, error) {
+func (g *genius) find(ctx context.Context, text string) ([]Match, error) {
 	if err := g.limiter.wait(ctx); err != nil {
 		return nil, err
 	}
 
 	query := url.Values{}
-	query.Set("q", leadArtist(q.Artist)+" "+q.Title)
+	query.Set("q", text)
 
 	resp, err := fetch(ctx, g.client, g.name(), geniusSearch+"?"+query.Encode(), "application/json")
 	if err != nil {

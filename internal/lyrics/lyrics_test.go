@@ -526,3 +526,26 @@ func TestUntitledTrackIsSearchedByFileName(t *testing.T) {
 		t.Error("a track with nothing to go on was searchable")
 	}
 }
+
+// A leak named after a line of the song is taken only when the line comes
+// round as a hook, and only a name long enough to be a line is tried that way.
+func TestHook(t *testing.T) {
+	words := "You tryna fuck or sum'?\nYou tryna fuck or sum?\nI said you tryna fuck or sum'\nBaby, what you want?"
+	if n := hookCount(words, "Fuck Or Sum"); n != 3 {
+		t.Errorf("hookCount = %d, want 3", n)
+	}
+	if n := hookCount(words, "Baby"); n != 1 {
+		t.Errorf("hookCount = %d, want 1", n)
+	}
+	for title, want := range map[string]bool{
+		"Fuck Or Sum":                    true,
+		"Fuck Or Sum (Session Edit)":     false, // the qualified attempt; the bare one follows
+		"Love":                           false,
+		"Go":                             false,
+		"One Two Three Four Five Six Se": false,
+	} {
+		if got := hookAttempt(Query{Artist: "Juice WRLD", Title: title}); got != want {
+			t.Errorf("hookAttempt(%q) = %v, want %v", title, got, want)
+		}
+	}
+}

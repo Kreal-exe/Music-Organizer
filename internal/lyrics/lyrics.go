@@ -83,6 +83,10 @@ type Match struct {
 
 	// Duration is the candidate track length, when the source reports one.
 	Duration time.Duration `json:"-"`
+
+	// Hook says the source found this song by its lyrics repeating the
+	// queried title, not by its name.
+	Hook bool `json:"-"`
 }
 
 // provider is one lyrics source.
@@ -129,7 +133,7 @@ func NewFinder() *Finder {
 				&lyricsovh{client: client, limiter: newLimiter(400 * time.Millisecond)},
 			},
 		},
-		MinScore: 0.62,
+		MinScore: defaultMinScore,
 	}
 }
 

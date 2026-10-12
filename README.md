@@ -213,6 +213,11 @@ than a guess:
   Edit)`, `Devil Horns (v1)` and `Insecurities OG` return nothing anywhere;
   searched under the plain name they are all found, and another take of the
   same song is accepted as a match.
+- **The title is a line of the song.** A leak is often named after its hook:
+  `Fuck Or Sum (Session Edit)` is Genius's `Extra (For Fun)`, and the two names
+  share nothing. When nothing is found by name, Genius is asked for the title
+  alone, and a song by the same artist is taken only if its words sing the
+  title at least three times.
 - **The title repeats the artist**, as a download names its file: `Lil Uzi
   Vert - No Script` is searched for under `No Script`, since asking for the
   artist twice finds nothing.

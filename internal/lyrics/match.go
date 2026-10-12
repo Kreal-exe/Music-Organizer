@@ -229,6 +229,11 @@ func score(q Query, candidate Match) float64 {
 	if shared := 0.9 * wordOverlap(q.Title, candidate.Title); shared > title {
 		title = shared
 	}
+	// Named after its hook: the source already checked that the words repeat
+	// the title, which is as good as a close name.
+	if candidate.Hook && title < hookTitleScore {
+		title = hookTitleScore
+	}
 
 	total := 0.6*title + 0.4*artist
 
@@ -415,4 +420,46 @@ func tidyLyrics(text string) string {
 		return ""
 	}
 	return text
+}
+
+// A song found by its hook is worth this much of a title match, and the hook
+// has to come round this often: a line said once is not what a song is named
+// after.
+const (
+	hookTitleScore  = 0.85
+	defaultMinScore = 0.62
+	minHookRepeats  = 3
+)
+
+// hookAttempt says whether a search is worth repeating by the title alone:
+// once per track, on the bare name, and only for a name long enough to be a
+// line rather than a word half the songs there are contain.
+func hookAttempt(q Query) bool {
+	bare := bareTitle(q.Title)
+	if fold(bare) != fold(q.Title) || (len(q.Qualifiers) > 0 && hasQualifiers(q.Qualifiers, q.Title)) {
+		return false
+	}
+	n := len(strings.Fields(bare))
+	return n >= 2 && n <= 6 && len(fold(bare)) >= 8
+}
+
+func anyAccepted(q Query, matches []Match) bool {
+	for _, m := range matches {
+		if score(q, m) >= defaultMinScore {
+			return true
+		}
+	}
+	return false
+}
+
+// hookCount is how many times a phrase is sung in the lyrics, word for word.
+func hookCount(lyrics, phrase string) int {
+	norm := func(s string) string {
+		return " " + strings.Join(strings.Fields(punctuation.ReplaceAllString(strings.ToLower(s), " ")), " ") + " "
+	}
+	p := norm(phrase)
+	if strings.TrimSpace(p) == "" {
+		return 0
+	}
+	return strings.Count(norm(lyrics), p)
 }
