@@ -97,6 +97,13 @@ once whether this application may control Music), and on Windows it reads the
 library file iTunes keeps beside its library. A playlist that does not find
 all its tracks says so, and a click on the count lists the ones missing.
 
+The list is grouped by format — iTunes and Music, Android, and the rest — with
+a box to tick a whole group. When playlists for the chosen player already lie
+where the new ones go, they can be updated (one saved under the same name
+replaces the old, the rest stay) or started over (all of them are set aside
+as `.bak` first, where no player reads them, on the phone or on this
+computer).
+
 A playlist is only useful if every path in it is spelled the way the file is
 named, byte for byte, and that is where playlists moved by hand go wrong. macOS
 often stores a name such as *Танцуй* with the *й* as two characters, a letter

@@ -263,6 +263,16 @@
       </div>
       <div id="pl-dest-note" class="notice" hidden></div>
 
+      <div id="pl-existing" class="existing" hidden>
+        <div id="pl-existing-title" class="existing-title"></div>
+        <div class="choices">
+          <label class="choice"><input type="radio" name="pl-mode" value="update" checked />
+            <span><b>Update them</b><em>a playlist saved under the same name replaces the old one; the rest stay as they are</em></span></label>
+          <label class="choice"><input type="radio" name="pl-mode" value="replace" />
+            <span><b>Start over</b><em>all of them are set aside first — each kept as .bak, where no player reads it — then the new ones are saved</em></span></label>
+        </div>
+      </div>
+
       <div class="toolbar save-row">
         <button id="pl-save" class="btn primary" disabled>Save playlists</button>
         <button id="pl-cancel" class="btn" hidden>Stop</button>

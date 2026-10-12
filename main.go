@@ -54,7 +54,16 @@ func main() {
 			WindowIsTranslucent:  false,
 		},
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHiddenInset(),
+			// The title bar is hidden behind the top bar, which drags the
+			// window. Wails' inset style puts a toolbar there to move the
+			// window buttons in, and the toolbar takes every click in that
+			// strip: Open library, Rescan and the theme switch did nothing.
+			// So the title bar is see-through and has no toolbar.
+			TitleBar: &mac.TitleBar{
+				TitlebarAppearsTransparent: true,
+				HideTitle:                  true,
+				FullSizeContent:            true,
+			},
 			About: &mac.AboutInfo{
 				Title:   "Music Library Organizer",
 				Message: "Keep a music library's artist list in order",

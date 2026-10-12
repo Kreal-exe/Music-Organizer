@@ -33,8 +33,15 @@ type playlists struct {
 	mu    sync.Mutex
 	next  int
 	read  map[string]playlist.Playlist
-	index *playlist.Index // the open library's files; nil until first needed
-	of    string          // the library root the index was made for
+	from  map[string]source // where each playlist was read from, by id
+	index *playlist.Index   // the open library's files; nil until first needed
+	of    string            // the library root the index was made for
+}
+
+// source is the file a playlist was read from.
+type source struct {
+	where string // "computer" or "phone"
+	path  string
 }
 
 // PlaylistItem is a playlist as the interface lists it.
@@ -110,6 +117,10 @@ func (a *App) keep(ctx context.Context, read []playlist.Playlist, where, file st
 		a.lists.next++
 		id := strconv.Itoa(a.lists.next)
 		a.lists.read[id] = list
+		if a.lists.from == nil {
+			a.lists.from = map[string]source{}
+		}
+		a.lists.from[id] = source{where: where, path: file}
 		item := PlaylistItem{ID: id, Name: list.Name, Format: list.Format, Where: where, Path: file,
 			Entries: len(list.Entries), Found: -1, Missing: []playlist.Entry{}, Visible: visible}
 		if index != nil {
@@ -211,9 +222,13 @@ func (a *App) LibraryPlaylists() ([]PlaylistItem, error) {
 			items = append(items, a.keep(a.ctx, read, "computer", file, -1)...)
 		}
 	}
-	// Music not answering is worth saying only when nothing else was found.
-	if len(items) == 0 && appErr != nil {
-		return items, appErr
+	// Music not answering is an error when nothing else was found, and worth
+	// saying either way: otherwise its playlists are simply not there.
+	if appErr != nil {
+		if len(items) == 0 {
+			return items, appErr
+		}
+		wr.EventsEmit(a.ctx, "playlists:notice", appErr.Error())
 	}
 	return items, nil
 }
@@ -280,6 +295,11 @@ type PlaylistSave struct {
 	Destination string `json:"destination"`
 	Folder      string `json:"folder"`
 	Serial      string `json:"serial"`
+	// Retire lists playlists (by id) to take out of the way before the new
+	// ones are written: the player's old playlists, when they are being made
+	// again from scratch. Each is kept beside itself as .bak, where no player
+	// reads it.
+	Retire []string `json:"retire"`
 }
 
 // PlaylistSaved is how one playlist came out.
@@ -294,6 +314,8 @@ type PlaylistSaved struct {
 	// -1 off a phone, or when the phone would not say.
 	Visible int    `json:"visible"`
 	Error   string `json:"error,omitempty"`
+	// Retired says this was an old playlist set aside, not a new one written.
+	Retired bool `json:"retired,omitempty"`
 }
 
 // SavePlaylists writes the chosen playlists for a player, each track looked
@@ -365,6 +387,32 @@ func (a *App) SavePlaylists(request PlaylistSave) ([]PlaylistSaved, error) {
 		if resolved, err := filepath.EvalSymlinks(filepath.FromSlash(folder)); err == nil {
 			folder = filepath.ToSlash(resolved)
 		}
+	}
+
+	// The old playlists go first, so a new one of the same name is not kept
+	// as their backup.
+	for _, id := range request.Retire {
+		a.lists.mu.Lock()
+		from, known := a.lists.from[id]
+		a.lists.mu.Unlock()
+		if !known {
+			continue
+		}
+		phase("Setting aside " + path.Base(from.path) + "…")
+		var err error
+		switch {
+		case from.where == "phone" && phone != nil:
+			err = phone.SetAside(ctx, from.path)
+		case from.where == "computer" && from.path != "" && filepath.IsAbs(from.path):
+			err = os.Rename(from.path, from.path+".bak")
+		default:
+			continue
+		}
+		retired := PlaylistSaved{ID: id, Name: path.Base(filepath.ToSlash(from.path)), File: from.path, Visible: -1, Missing: []string{}, Retired: true}
+		if err != nil {
+			retired.Error = err.Error()
+		}
+		wr.EventsEmit(a.ctx, "playlists:saved", retired)
 	}
 
 	results := []PlaylistSaved{}

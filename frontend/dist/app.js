@@ -2537,12 +2537,59 @@ async function findPhone() {
   setPlaylistsBusy(lists.busy);
 }
 
+// The list is grouped by format — iTunes', Android's, and so on — and each
+// group has a box of its own, so all of one player's playlists can be taken or
+// left together. A group's key is the player it is written for, which is how
+// the playlists already made for the chosen player are found.
+const playlistGroups = [
+  { key: "itunes", title: "iTunes and Music" },
+  { key: "android", title: "Android — Phonograph and the rest (.m3u)" },
+  { key: "m3u8", title: "VLC, foobar2000, AIMP, Winamp, MusicBee (.m3u8)" },
+  { key: "wpl", title: "Windows Media Player (.wpl)" },
+  { key: "xspf", title: "XSPF (.xspf)" },
+  { key: "pls", title: "PLS (.pls)" },
+];
+
+function playlistGroup(item) {
+  switch (item.format) {
+    case "Music": case "iTunes": case "iTunes XML": return "itunes";
+    case "M3U": return "android";
+    case "M3U8": return "m3u8";
+    case "WPL": case "ZPL": return "wpl";
+    case "XSPF": return "xspf";
+    case "PLS": return "pls";
+  }
+  return "android";
+}
+
 function renderPlaylists() {
   const list = $("pl-list");
-  list.replaceChildren(...lists.items.map(playlistRow));
+  const rows = [];
+  for (const group of playlistGroups) {
+    const items = lists.items.filter((item) => playlistGroup(item) === group.key);
+    if (!items.length) continue;
+    rows.push(playlistGroupHead(group, items), ...items.map(playlistRow));
+  }
+  list.replaceChildren(...rows);
   $("count-playlists").textContent = lists.items.length || "";
   $("pl-all").checked = lists.items.length > 0 && lists.items.every((item) => item.ticked);
+  renderExisting();
   updateSaveButton();
+}
+
+function playlistGroupHead(group, items) {
+  const head = el("label", "row-item playlist-group");
+  const box = el("input");
+  box.type = "checkbox";
+  const ticked = items.filter((item) => item.ticked).length;
+  box.checked = ticked === items.length;
+  box.indeterminate = ticked > 0 && ticked < items.length;
+  box.addEventListener("change", () => {
+    for (const item of items) item.ticked = box.checked;
+    renderPlaylists();
+  });
+  head.append(box, el("b", "", group.title), el("span", "muted", `${ticked} of ${plural(items.length, "playlist")} ticked`));
+  return head;
 }
 
 function playlistRow(item) {
@@ -2552,8 +2599,7 @@ function playlistRow(item) {
   box.checked = item.ticked;
   box.addEventListener("change", () => {
     item.ticked = box.checked;
-    $("pl-all").checked = lists.items.every((i) => i.ticked);
-    updateSaveButton();
+    renderPlaylists();
   });
 
   const main = el("div", "row-main");
@@ -2612,6 +2658,7 @@ function missingList(missing) {
 
 function resultLine(result) {
   if (result.error) return el("div", "row-sub error-text", `✗ ${result.error}`);
+  if (result.retired) return el("div", "row-sub", "↷ set aside as .bak");
   let text = `→ ${baseName(result.file)}: ${result.found} of ${tracks(result.entries)}`;
   if (result.visible >= 0) text += ` · the phone shows ${result.visible}`;
   return el("div", result.found < result.entries ? "row-sub warn-text" : "row-sub ok-text", text);
@@ -2660,12 +2707,14 @@ function updateDestinations() {
   const note = $("pl-dest-note");
   note.hidden = !(onPhone && target && target.absolute);
   note.textContent = "iTunes and Music need paths on a computer: save these on this computer, or pick another player for the phone.";
+  renderExisting();
   updateSaveButton();
 }
 
 for (const radio of document.querySelectorAll('input[name="pl-dest"]')) {
   radio.addEventListener("change", updateDestinations);
 }
+$("pl-phone-folder").addEventListener("input", renderExisting);
 
 $("pl-folder-pick").addEventListener("click", async (event) => {
   event.preventDefault();
@@ -2680,6 +2729,42 @@ $("pl-folder-pick").addEventListener("click", async (event) => {
     toast(String(err), true);
   }
 });
+
+// Paths compared as folders: a phone's storage goes by several names.
+function folderKey(path) {
+  return String(path || "").replace(/\\/g, "/").replace(/^\/sdcard(?=\/|$)/, "/storage/emulated/0").replace(/\/+$/, "").toLowerCase();
+}
+
+// destinationFolder is where the playlists are about to go, and whether that
+// is on a phone.
+function destinationFolder() {
+  switch (destination()) {
+    case "folder": return { folder: lists.folder, phone: false };
+    case "phone": return { folder: $("pl-phone-folder").value.trim(), phone: true };
+    default: return { folder: state.root, phone: state.onPhone };
+  }
+}
+
+// existingPlaylists are the playlists for the chosen player that already lie
+// where the new ones will go.
+function existingPlaylists() {
+  const dest = destinationFolder();
+  if (!dest.folder) return [];
+  return lists.items.filter((item) => playlistGroup(item) === lists.target
+    && (item.where === "phone") === dest.phone
+    && !(item.result && item.result.retired)
+    && folderKey(item.path.slice(0, item.path.replace(/\\/g, "/").lastIndexOf("/"))) === folderKey(dest.folder));
+}
+
+function renderExisting() {
+  const box = $("pl-existing");
+  if (!box) return;
+  const existing = existingPlaylists();
+  box.hidden = existing.length === 0;
+  if (!existing.length) return;
+  const target = lists.targets.find((t) => t.id === lists.target);
+  $("pl-existing-title").textContent = `${plural(existing.length, "playlist")} for ${target ? target.title.split(" — ")[0] : "this player"} already there: ${existing.map((i) => i.name).join(", ")}`;
+}
 
 function updateSaveButton() {
   const ticked = lists.items.filter((item) => item.ticked).length;
@@ -2697,6 +2782,8 @@ $("pl-save").addEventListener("click", async () => {
     destination: destination(),
     folder: destination() === "folder" ? lists.folder : destination() === "phone" ? $("pl-phone-folder").value.trim() : "",
     serial: destination() === "phone" && lists.phone ? lists.phone.serial : "",
+    retire: $("pl-existing").hidden || !document.querySelector('input[name="pl-mode"][value="replace"]').checked
+      ? [] : existingPlaylists().map((item) => item.id),
   };
   for (const item of chosen) item.result = null;
   $("pl-log").replaceChildren();
@@ -2717,6 +2804,8 @@ $("pl-save").addEventListener("click", async () => {
   }
 });
 
+window.runtime.EventsOn("playlists:notice", (text) => toast(text, true));
+
 window.runtime.EventsOn("playlists:phase", (text) => {
   if (text) $("pl-status").textContent = text;
 });
@@ -2727,6 +2816,11 @@ window.runtime.EventsOn("playlists:saved", (result) => {
   renderPlaylists();
 
   const log = $("pl-log");
+  if (result.retired) {
+    log.append(el("div", result.error ? "error" : "note", result.error
+      ? `✗ ${result.file}: could not set it aside — ${result.error}` : `↷ ${result.file} set aside as .bak`));
+    return;
+  }
   if (result.error) {
     log.append(el("div", "error", `✗ ${result.name}: ${result.error}`));
   } else {

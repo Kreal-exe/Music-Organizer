@@ -187,3 +187,16 @@ func (p *Phone) WritePlaylist(ctx context.Context, path string, data []byte, ent
 	}
 	return best, nil
 }
+
+// SetAside takes a playlist out of every player's sight without losing it:
+// the file is renamed to .bak, and the media database is told it is gone.
+func (p *Phone) SetAside(ctx context.Context, path string) error {
+	if _, err := p.run(ctx, "shell", "mv -f "+shellQuote(path)+" "+shellQuote(path+".bak")); err != nil {
+		return fmt.Errorf("could not set the old playlist aside: %w", err)
+	}
+	if p.exists(ctx, path) {
+		return fmt.Errorf("could not set the old playlist aside")
+	}
+	p.scanFile(ctx, path)
+	return nil
+}
